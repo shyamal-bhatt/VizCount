@@ -49,6 +49,15 @@
         {
           "photosPermission": "The app accesses your photos to let you share test evidence with the OCR parser."
         }
+      ],
+      "@morrowdigital/watermelondb-expo-plugin",
+      [
+        "expo-build-properties",
+        {
+          "android": {
+            "useLegacyPackaging": true
+          }
+        }
       ]
     ],
     "experiments": {

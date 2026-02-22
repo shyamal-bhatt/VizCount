@@ -1,0 +1,55 @@
+diff --git a/node_modules/@morrowdigital/watermelondb-expo-plugin/build/withWatermelon.js b/node_modules/@morrowdigital/watermelondb-expo-plugin/build/withWatermelon.js
+index 798eb8b..704e117 100644
+--- a/node_modules/@morrowdigital/watermelondb-expo-plugin/build/withWatermelon.js
++++ b/node_modules/@morrowdigital/watermelondb-expo-plugin/build/withWatermelon.js
+@@ -75,16 +75,11 @@ function mainApplication(config) {
+         if (!mod.modResults.contents.includes("import com.nozbe.watermelondb.jsi.WatermelonDBJSIPackage")) {
+             mod.modResults['contents'] = mod.modResults.contents.replace('import android.app.Application', `
+ import android.app.Application
+-import com.nozbe.watermelondb.jsi.WatermelonDBJSIPackage;
+-import com.facebook.react.bridge.JSIModulePackage;        
+ `);
+         }
+         if (!mod.modResults.contents.includes("override fun getJSIModulePackage(): JSIModulePackage")) {
+             const newContents2 = mod.modResults.contents.replace('override val isHermesEnabled: Boolean = BuildConfig.IS_HERMES_ENABLED', `
+-        override val isHermesEnabled: Boolean = BuildConfig.IS_HERMES_ENABLED
+-        override fun getJSIModulePackage(): JSIModulePackage {
+-        return WatermelonDBJSIPackage()
+-        }`);
++        override val isHermesEnabled: Boolean = BuildConfig.IS_HERMES_ENABLED`);
+             mod.modResults.contents = newContents2;
+         }
+         return mod;
+@@ -92,16 +87,16 @@ import com.facebook.react.bridge.JSIModulePackage;
+ }
+ function proGuardRules(config) {
+     return (0, config_plugins_1.withDangerousMod)(config, ['android', async (config) => {
+-            const contents = await fs.readFile(`${config.modRequest.platformProjectRoot}/app/proguard-rules.pro`, 'utf-8');
+-            if (!contents.includes("-keep class com.nozbe.watermelondb.** { *; }")) {
+-                const newContents = `
++        const contents = await fs.readFile(`${config.modRequest.platformProjectRoot}/app/proguard-rules.pro`, 'utf-8');
++        if (!contents.includes("-keep class com.nozbe.watermelondb.** { *; }")) {
++            const newContents = `
+       ${contents}
+       -keep class com.nozbe.watermelondb.** { *; }
+       `;
+-                await fs.writeFile(`${config.modRequest.platformProjectRoot}/app/proguard-rules.pro`, newContents);
+-            }
+-            return config;
+-        }]);
++            await fs.writeFile(`${config.modRequest.platformProjectRoot}/app/proguard-rules.pro`, newContents);
++        }
++        return config;
++    }]);
+ }
+ /**
+  * Version 50+ finish
+@@ -140,7 +135,7 @@ import java.util.ArrayList;`, "import okhttp3.OkHttpClient;", contents);
+           return databaseFiles;
+         }
+       })));`, "client.addPlugin(new DatabasesFlipperPlugin(context));", updated, 0, // replace original plugin
+-            1);
++                1);
+             await fs.writeFile(filePath, updated);
+             return config;
+         },
