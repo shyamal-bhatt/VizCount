@@ -1,4 +1,5 @@
 import React from 'react';
+import { Platform } from 'react-native';
 import FontAwesome from '@expo/vector-icons/FontAwesome';
 import { Tabs } from 'expo-router';
 import { useColorScheme } from 'nativewind';
@@ -18,21 +19,14 @@ export default function TabLayout() {
     <Tabs
       screenOptions={{
         tabBarActiveTintColor: '#00C4A7', // brand teal
-        tabBarInactiveTintColor: '#8B949E', // brand muted
+        tabBarInactiveTintColor: isDark ? '#8B949E' : '#6B7280',
         tabBarStyle: {
-          backgroundColor: isDark ? '#16191C' : '#FCFBF4', // dark vs light
-          borderTopColor: isDark ? '#1D2125' : '#E5E7EB', // card vs border-gray-200
+          backgroundColor: isDark ? '#0D0F11' : '#FFFFFF',
+          borderTopColor: isDark ? '#21262d' : '#E5E7EB',
+          height: Platform.OS === 'ios' ? 85 : 65,
+          paddingVertical: Platform.OS === 'ios' ? 5 : 10,
         },
-        headerStyle: {
-          backgroundColor: isDark ? '#16191C' : '#FCFBF4',
-          shadowColor: 'transparent', // removes border
-          elevation: 0,
-        },
-        headerTintColor: isDark ? '#E1E3E6' : '#11181C',
-        headerTitleStyle: {
-          fontWeight: 'bold',
-        },
-        headerShown: false, // Custom header will be in index.tsx
+        headerShown: false, // We're using StockPulseHeader globally
       }}>
       <Tabs.Screen
         name="index"

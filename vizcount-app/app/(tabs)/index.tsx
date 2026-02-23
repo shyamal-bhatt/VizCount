@@ -1,20 +1,25 @@
-import React, { useRef, useMemo } from 'react';
-import { View, Text, Pressable, Alert, Linking } from 'react-native';
+import React, { useRef, useMemo, useState, useEffect } from 'react';
+import { View, Text, Pressable, Alert, Linking, Dimensions } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import FontAwesome from '@expo/vector-icons/FontAwesome';
 import { useColorScheme } from 'nativewind';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import BottomSheet, { BottomSheetView } from '@gorhom/bottom-sheet';
 import { Camera, useCameraDevice, useCameraPermission, useFrameProcessor } from 'react-native-vision-camera';
-import { useTextRecognition, PhotoRecognizer } from 'react-native-vision-camera-ocr-plus';
+import { useTextRecognition, PhotoRecognizer, Text as OCRText } from 'react-native-vision-camera-ocr-plus';
 import * as ImagePicker from 'expo-image-picker';
 import { useRunOnJS } from 'react-native-worklets-core';
 import { Logger } from '../../utils/logger';
 import { CarouselModal } from '../../components/CarouselModal';
-import { Text as OCRText } from 'react-native-vision-camera-ocr-plus';
-import { Canvas, Rect } from '@shopify/react-native-skia';
-import { useSharedValue, useDerivedValue } from 'react-native-reanimated';
-import { Dimensions } from 'react-native';
+import { Canvas, Rect, Path, Skia, FillType } from '@shopify/react-native-skia';
+import { OpenCV, ObjectType, DataTypes, ColorConversionCodes, BorderTypes } from 'react-native-fast-opencv';
+import { useResizePlugin } from 'vision-camera-resize-plugin';
+import { useSharedValue, useDerivedValue, withTiming, withSequence, runOnJS } from 'react-native-reanimated';
+import * as Haptics from 'expo-haptics';
+import { database } from '../../db';
+import { ProductPickerModal, Product } from '@/components/ProductPickerModal';
+import { ScannedItem } from '@/db/models/ScannedItem';
+import { StockPulseHeader } from '@/components/StockPulseHeader';
 
 // Fallback interface because ocr-plus doesn't export BlockData directly
 interface BlockData {
@@ -27,9 +32,23 @@ interface BlockData {
     x: number;
     y: number;
   };
+  confidence?: number;
 }
 
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
+
+// Define the Region of Interest (ROI) bounds directly in screen coordinates
+const ROI_WIDTH = SCREEN_WIDTH * 0.85;
+const ROI_HEIGHT = 160;
+const ROI_X = (SCREEN_WIDTH - ROI_WIDTH) / 2;
+// Adjust Y slightly upwards to account for the header area
+const ROI_Y = (SCREEN_HEIGHT - ROI_HEIGHT) / 2 - 40;
+
+// Generate the Skia clipping mask path (Full screen dark with a clear hole in the middle)
+const overlayPath = Skia.Path.Make();
+overlayPath.addRect(Skia.XYWHRect(0, 0, SCREEN_WIDTH, SCREEN_HEIGHT));
+overlayPath.addRect(Skia.XYWHRect(ROI_X, ROI_Y, ROI_WIDTH, ROI_HEIGHT));
+overlayPath.setFillType(FillType.EvenOdd);
 
 // Custom component to handle the Animated Props on the UI Thread securely without crashing React
 const BoundingBox = ({ block, scale, offsetX, offsetY }: { block: any; scale: any; offsetX: any; offsetY: any }) => {
@@ -47,71 +66,80 @@ const BoundingBox = ({ block, scale, offsetX, offsetY }: { block: any; scale: an
       y={y}
       width={width}
       height={height}
-      color="rgba(0, 196, 167, 0.4)"
+      color="rgba(0, 196, 167, 0.4)" // Brand Teal
       style="stroke"
       strokeWidth={strokeW}
     />
   );
-};
+}
 
 export default function ScanScreen() {
-  const { colorScheme, toggleColorScheme } = useColorScheme();
+  const { colorScheme } = useColorScheme();
   const isDark = colorScheme === 'dark';
 
-  const [isCameraActive, setIsCameraActive] = React.useState(false);
-  const [showBoundingBoxes, setShowBoundingBoxes] = React.useState(false);
-  const [testImages, setTestImages] = React.useState<string[]>([]);
-  const [ocrResults, setOcrResults] = React.useState<OCRText[]>([]);
-  const [isGalleryModalVisible, setIsGalleryModalVisible] = React.useState(false);
+  const [isCameraActive, setIsCameraActive] = useState(false);
+  const [showBoundingBoxes, setShowBoundingBoxes] = useState(false);
+  const [testImages, setTestImages] = useState<string[]>([]);
+  const [ocrResults, setOcrResults] = useState<OCRText[]>([]);
+  const [isGalleryModalVisible, setIsGalleryModalVisible] = useState(false);
 
   const device = useCameraDevice('back');
   const { hasPermission, requestPermission } = useCameraPermission();
 
   const { scanText } = useTextRecognition({
     useLightweightMode: true,
-    frameSkipThreshold: 10,
+    frameSkipThreshold: 20, // Reduced to ~3 FPS for better quality checks
   });
+
+  const { resize } = useResizePlugin();
 
   const logDebug = useRunOnJS((context: string, msg: string, data: any) => {
     Logger.debug(context, msg, data);
   }, []);
 
-  const logResult = useRunOnJS((text: string) => {
-    console.log(text);
+  const saveToDatabase = useRunOnJS((data: { pid: string, netKg: string, sn: string }) => {
+    console.log("Saving validated data to DB:", data);
+    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+
+    database.write(async () => {
+      try {
+        const items = database.collections.get('scanned_items');
+        await items.create((item: any) => {
+          item.pid = data.pid;
+          item.netKg = parseFloat(data.netKg) || 0;
+          item.sn = data.sn;
+          item.name = 'Dairy Product'; // Fallback for scanned items
+          item.bestBeforeDate = Date.now();
+          item.packedOnDate = Date.now();
+          item.count = 1; // Default count to 1 for weighable items as a container base
+        });
+        Logger.info('DB', `Successfully saved scanned item ${data.pid} to WatermelonDB`);
+      } catch (error) {
+        Logger.error('DB', `Failed to save item ${data.pid} to WatermelonDB`, error);
+      }
+    });
+
   }, []);
 
   // Track live text blocks via Reanimated for Skia
-  // Pre-allocate an array of 20 shared values to avoid mapping React Elements dynamically during render
   const activeBlocks = Array.from({ length: 20 }).map(() => useSharedValue<BlockData | null>(null));
 
-  // Track true hardware frame sizes from the worklet to scale mathematical rectangles properly
+  // True hardware frame sizes to scale mathematical rectangles properly
   const frameWidth = useSharedValue(1080);
   const frameHeight = useSharedValue(1920);
 
-  const frameProcessor = useFrameProcessor((frame) => {
-    'worklet';
-    frameWidth.value = frame.width;
-    frameHeight.value = frame.height;
+  // Success state for ROI box
+  const isSuccess = useSharedValue(false);
 
-    const data = scanText(frame);
-    if (data && data.blocks && data.blocks.length > 0) {
-      logDebug('OCR', 'Detected Text Blocks', data.blocks.length);
-      logResult(data.resultText);
-      logDebug('Skia', 'Bounding boxes added to UI Thread arrays', data.blocks.length);
-      logDebug('Skia_Coordinates', `Frame: ${frameWidth.value}x${frameHeight.value}`, JSON.stringify(data.blocks[0].blockFrame));
+  // Quality warnings
+  const userWarning = useSharedValue("");
 
-      // Update the pre-allocated shared values 
-      for (let i = 0; i < 20; i++) {
-        activeBlocks[i].value = i < data.blocks.length ? data.blocks[i] : null;
-      }
-    } else {
-      for (let i = 0; i < 20; i++) {
-        activeBlocks[i].value = null;
-      }
-    }
-  }, [scanText]);
+  // Temporal Voting Queue
+  // We store stringified results. If 2 out of 3 match, we validate it.
+  const temporalVoteQueue = useSharedValue<string[]>([]);
+  const lastInteractionTime = useSharedValue<number>(Date.now());
 
-  // Derive mathematical cover scalings for the UI thread Skia canvas (since the camera fills the screen via cover)
+  // Derive mathematical cover scalings for the UI thread Skia canvas
   const cameraScale = useDerivedValue(() => {
     const scaleW = SCREEN_WIDTH / frameWidth.value;
     const scaleH = SCREEN_HEIGHT / frameHeight.value;
@@ -126,42 +154,206 @@ export default function ScanScreen() {
     return (SCREEN_HEIGHT - renderedH) / 2;
   });
 
+  const frameProcessor = useFrameProcessor((frame) => {
+    'worklet';
+    frameWidth.value = frame.width;
+    frameHeight.value = frame.height;
+
+    // --- 1. Quality Checks using Fast OpenCV ---
+
+    // Scale the frame down dramatically to improve OpenCV performance
+    const targetHeight = frame.height / 4;
+    const targetWidth = frame.width / 4;
+
+    // Resize and convert YUV to BGR natively via the resize plugin
+    const resizedBuffer = resize(frame, {
+      scale: { width: targetWidth, height: targetHeight },
+      pixelFormat: 'bgr',
+      dataType: 'uint8',
+    });
+
+    const bgrMat = OpenCV.frameBufferToMat(targetHeight, targetWidth, 3, resizedBuffer);
+    const grayMat = OpenCV.createObject(ObjectType.Mat, targetHeight, targetWidth, DataTypes.CV_8U);
+    OpenCV.invoke('cvtColor', bgrMat, grayMat, ColorConversionCodes.COLOR_BGR2GRAY);
+
+    const laplacianMat = OpenCV.createObject(ObjectType.Mat, targetHeight, targetWidth, DataTypes.CV_64F);
+    OpenCV.invoke('Laplacian', grayMat, laplacianMat, DataTypes.CV_64F, 1, 1, 0, BorderTypes.BORDER_DEFAULT);
+
+    const mean = OpenCV.createObject(ObjectType.Mat, 1, 1, DataTypes.CV_64F);
+    const stddev = OpenCV.createObject(ObjectType.Mat, 1, 1, DataTypes.CV_64F);
+
+    // Blur analysis using Variance of Laplacian
+    OpenCV.invoke('meanStdDev', laplacianMat, mean, stddev);
+    const stddevBufferInfo = OpenCV.matToBuffer(stddev, 'float64');
+    const stdDevVal = stddevBufferInfo.buffer[0];
+    const blurVariance = stdDevVal * stdDevVal;
+
+    // Check brightness for glare or underexposure
+    OpenCV.invoke('meanStdDev', grayMat, mean, stddev);
+    const meanBufferInfo = OpenCV.matToBuffer(mean, 'float64');
+    const brightnessVal = meanBufferInfo.buffer[0];
+
+    OpenCV.clearBuffers(); // FREE MEMORY IMMEDIATELY
+
+    if (blurVariance < 100) {
+      console.log(`[OCR] Frame blurry (Variance: ${blurVariance.toFixed(2)}). Skipping.`);
+      userWarning.value = "Image is blurry. Please hold steady.";
+      return;
+    }
+
+    if (brightnessVal > 220) {
+      userWarning.value = "Too much reflection/glare. Tilt camera.";
+      return;
+    }
+
+    if (brightnessVal < 40) {
+      userWarning.value = "Too dark. Move to better lighting.";
+      return;
+    }
+
+    userWarning.value = ""; // Clear warnings
+
+    // --- 2. Execute OCR ---
+    const data = scanText(frame);
+    if (data && data.blocks && data.blocks.length > 0) {
+      logDebug('OCR', `Raw OCR Read: ${data.resultText.substring(0, 100)}...`, { blocks: data.blocks.length });
+
+      // 1. Coordinate Mapping & Filtering
+      let validTextInROI = "";
+
+      for (let i = 0; i < data.blocks.length; i++) {
+        const block = data.blocks[i];
+
+        // 1a. Confidence Check (If available on the platform)
+        const vBlock = block as any;
+        if (vBlock.confidence !== undefined && vBlock.confidence < 0.8) {
+          continue; // Skip this block if confidence is explicitly low
+        }
+
+        // Map center to screen space
+        const screenX = ((block.blockFrame.boundingCenterX - (block.blockFrame.width / 2)) * cameraScale.value) + cameraOffsetX.value;
+        const screenY = ((block.blockFrame.boundingCenterY - (block.blockFrame.height / 2)) * cameraScale.value) + cameraOffsetY.value;
+        const screenW = block.blockFrame.width * cameraScale.value;
+        const screenH = block.blockFrame.height * cameraScale.value;
+        const centerX = screenX + (screenW / 2);
+        const centerY = screenY + (screenH / 2);
+
+        // Check if the center of this text block is inside the static ROI box
+        const isInsideROI = (
+          centerX >= ROI_X &&
+          centerX <= (ROI_X + ROI_WIDTH) &&
+          centerY >= ROI_Y &&
+          centerY <= (ROI_Y + ROI_HEIGHT)
+        );
+
+        // Update visual bounding box overlays (only show ones inside ROI)
+        if (i < 20) {
+          activeBlocks[i].value = isInsideROI ? block : null;
+        }
+
+        if (isInsideROI) {
+          validTextInROI += block.blockText + " ";
+        }
+      }
+
+      if (validTextInROI.length > 0) {
+        logDebug('OCR', 'Text inside ROI:', validTextInROI);
+      }
+
+      // Clear remaining blocks
+      for (let i = data.blocks.length; i < 20; i++) {
+        activeBlocks[i].value = null;
+      }
+
+      // 2. Regex Parsing on filtered text
+      // E.g., looking for "PID: 12345" and "NET KG: 25.5"
+      const pidMatch = validTextInROI.match(/PID:\s*([A-Z0-9\-]+)/i);
+      const netWeightMatch = validTextInROI.match(/NET\s*KG:?\s*([\d\.]+)/i);
+      const snMatch = validTextInROI.match(/SN:\s*([A-Z0-9]+)/i);
+
+      if (pidMatch && netWeightMatch) {
+        const pid = pidMatch[1];
+        const netKg = netWeightMatch[1];
+        const sn = snMatch ? snMatch[1] : `AUTO-${Date.now()}`;
+
+        const payloadString = `${pid}_${netKg}`; // Signature of this read
+
+        // Push to queue
+        let newQueue = [...temporalVoteQueue.value];
+        if (newQueue.length >= 3) {
+          newQueue.shift(); // Keep size at 3
+        }
+        newQueue.push(payloadString);
+        temporalVoteQueue.value = newQueue;
+
+        // Check for consensus (2 out of 3)
+        let countMatches = 0;
+        for (let item of newQueue) {
+          if (item === payloadString) countMatches++;
+        }
+
+        if (countMatches >= 2 && !isSuccess.value) {
+          // Consensus reached! Reset interaction time.
+          lastInteractionTime.value = Date.now();
+          isSuccess.value = true;
+
+          saveToDatabase({
+            pid: pid,
+            netKg: netKg,
+            sn: sn
+          });
+
+          // Revert success color after 1.5 seconds
+          setTimeout(() => {
+            isSuccess.value = false;
+            temporalVoteQueue.value = []; // Clear queue to avoid rapid-fire saves
+          }, 1500);
+        }
+      } else {
+        // Drop a bad frame into the queue to break invalid steaks
+        let newQueue = [...temporalVoteQueue.value];
+        if (newQueue.length >= 3) newQueue.shift();
+        newQueue.push("INVALID");
+        temporalVoteQueue.value = newQueue;
+      }
+
+      // Check for 3-second timeout
+      const now = Date.now();
+      if (now - lastInteractionTime.value > 3000) {
+        userWarning.value = "Cannot read clearly. Please reposition and try again.";
+      }
+    } else {
+      // Clear all bindings if no text is found
+      for (let i = 0; i < 20; i++) {
+        activeBlocks[i].value = null;
+      }
+
+      const now = Date.now();
+      if (now - lastInteractionTime.value > 3000) {
+        userWarning.value = "Cannot read clearly. Please reposition and try again.";
+      }
+
+      let newQueue = [...temporalVoteQueue.value];
+      if (newQueue.length >= 3) newQueue.shift();
+      newQueue.push("EMPTY");
+      temporalVoteQueue.value = newQueue;
+    }
+  }, [scanText, cameraScale, cameraOffsetX, cameraOffsetY]);
+
+  // Derived color for the ROI boundary based on success state
+  const roiBorderColor = useDerivedValue(() => {
+    return isSuccess.value ? "rgba(0, 255, 0, 0.8)" : "rgba(255, 255, 255, 0.5)";
+  });
+
   // BottomSheet setup
   const bottomSheetRef = useRef<BottomSheet>(null);
   const snapPoints = useMemo(() => ['12%', '45%'], []);
 
   return (
     <GestureHandlerRootView className="flex-1">
-      <SafeAreaView className="flex-1 bg-brand-light dark:bg-brand-dark">
-        {/* Header */}
-        <View className="flex-row items-center justify-between px-4 py-3 border-b border-gray-200 dark:border-brand-card bg-brand-light dark:bg-brand-dark">
-          <View className="flex-row items-center">
-            {/* Logo icon acting as Theme Toggle */}
-            <Pressable
-              onPress={toggleColorScheme}
-              className="w-10 h-10 bg-brand-teal rounded-xl items-center justify-center mr-3"
-            >
-              <FontAwesome name="cube" size={20} color={isDark ? "#16191C" : "#FFFFFF"} />
-            </Pressable>
-            <View>
-              <Text className="text-gray-900 dark:text-white text-lg font-bold">VizCount</Text>
-              <Text className="text-gray-500 dark:text-brand-muted text-xs">Inventory Counter</Text>
-            </View>
-          </View>
-
-          <View className="flex-row items-center space-x-2">
-            {/* Dropdown placeholder */}
-            <Pressable className="flex-row items-center bg-gray-100 dark:bg-brand-darker border border-gray-200 dark:border-brand-card px-3 py-2 rounded-xl mr-2">
-              <Text className="text-gray-800 dark:text-brand-text mr-2">Dairy</Text>
-              <FontAwesome name="chevron-down" size={12} color={isDark ? "#8B949E" : "#6B7280"} />
-            </Pressable>
-            {/* Dashboard Button */}
-            <Pressable className="flex-row items-center border border-gray-200 dark:border-brand-card px-3 py-2 rounded-xl">
-              <FontAwesome name="external-link" size={14} color={isDark ? "#E1E3E6" : "#4B5563"} className="mr-2" />
-              <Text className="text-gray-800 dark:text-brand-text">Dashboard</Text>
-            </Pressable>
-          </View>
-        </View>
+      <SafeAreaView className="flex-1 bg-brand-light dark:bg-brand-dark" edges={['bottom', 'left', 'right']}>
+        {/* Header powered by global component replacing previous mockups */}
+        <StockPulseHeader />
 
         {/* Main Camera Prompt Area */}
         {isCameraActive && device ? (
@@ -173,27 +365,37 @@ export default function ScanScreen() {
               frameProcessor={frameProcessor}
             />
 
-            {/* Skia Live Bounding Box Overlay */}
-            {showBoundingBoxes && (
-              <View className="absolute inset-0 z-10" pointerEvents="none" style={{ elevation: 10 }}>
-                <Canvas style={{ flex: 1 }}>
-                  {/* Debug Red Square */}
-                  <Rect x={20} y={150} width={80} height={80} color="red" />
+            {/* Skia Full Screen Overlay with ROI Cutout */}
+            <View className="absolute inset-0 z-10" pointerEvents="none" style={{ elevation: 10 }}>
+              <Canvas style={{ flex: 1 }}>
+                {/* Dimmed Background Overlay */}
+                <Path path={overlayPath} color="rgba(0, 0, 0, 0.6)" />
 
-                  {activeBlocks.map((blockSV, index) => {
-                    return (
-                      <BoundingBox
-                        key={`live-box-${index}`}
-                        block={blockSV}
-                        scale={cameraScale}
-                        offsetX={cameraOffsetX}
-                        offsetY={cameraOffsetY}
-                      />
-                    );
-                  })}
-                </Canvas>
-              </View>
-            )}
+                {/* Animated ROI Border */}
+                <Rect
+                  x={ROI_X}
+                  y={ROI_Y}
+                  width={ROI_WIDTH}
+                  height={ROI_HEIGHT}
+                  color={roiBorderColor}
+                  style="stroke"
+                  strokeWidth={3}
+                />
+
+                {/* Visual debug bounds for OCR texts inside ROI */}
+                {showBoundingBoxes && activeBlocks.map((blockSV, index) => {
+                  return (
+                    <BoundingBox
+                      key={`live-box-${index}`}
+                      block={blockSV}
+                      scale={cameraScale}
+                      offsetX={cameraOffsetX}
+                      offsetY={cameraOffsetY}
+                    />
+                  );
+                })}
+              </Canvas>
+            </View>
 
             <View className="absolute top-4 right-4 flex-col items-end space-y-4">
               {/* Close Camera Button */}
@@ -215,6 +417,16 @@ export default function ScanScreen() {
                 <Text className="text-white font-bold">{showBoundingBoxes ? 'Boxes ON' : 'Boxes OFF'}</Text>
               </Pressable>
             </View>
+
+            {/* Warning Prompt (Blur/Glare etc.) */}
+            {userWarning.value !== "" && (
+              <View className="absolute bottom-32 left-0 right-0 items-center justify-center">
+                <View className="bg-orange-500/90 px-6 py-3 rounded-full flex-row items-center">
+                  <FontAwesome name="warning" size={16} color="white" className="mr-2" />
+                  <Text className="text-white font-bold ml-2">{userWarning.value}</Text>
+                </View>
+              </View>
+            )}
           </View>
         ) : (
           <View className="flex-1 items-center justify-center bg-brand-light dark:bg-brand-dark px-6">
