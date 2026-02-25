@@ -78,6 +78,7 @@ MANIFEST
 
 # Environments
 .env
+*/.venv
 .venv
 env/
 venv/
@@ -87,3 +88,5 @@ venv.bak/
 
 # Streamlit config
 .streamlit/secrets.toml
+
+data.json

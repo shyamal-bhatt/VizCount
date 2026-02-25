@@ -24,7 +24,29 @@ export const unstable_settings = {
 // Prevent the splash screen from auto-hiding before asset loading is complete.
 SplashScreen.preventAutoHideAsync();
 
+import '@react-native-firebase/app';
+import appCheck from '@react-native-firebase/app-check';
+
 export default function RootLayout() {
+  useEffect(() => {
+    const rnfbProvider = appCheck().newReactNativeFirebaseAppCheckProvider();
+
+    rnfbProvider.configure({
+      android: {
+        provider: __DEV__ ? 'debug' : 'playIntegrity',
+        debugToken: __DEV__ ? process.env.EXPO_PUBLIC_APP_CHECK_DEBUG_TOKEN : undefined,
+      },
+      apple: {
+        provider: __DEV__ ? 'debug' : 'appAttestWithDeviceCheckFallback',
+      },
+    });
+
+    appCheck().initializeAppCheck({
+      provider: rnfbProvider,
+      isTokenAutoRefreshEnabled: true,
+    });
+  }, []);
+
   const [loaded, error] = useFonts({
     SpaceMono: require('../assets/fonts/SpaceMono-Regular.ttf'),
     ...FontAwesome.font,

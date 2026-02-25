@@ -4,3 +4,11 @@
 
 expo-env.d.ts
 # @end expo-cli
+
+# Environment variables - keep secrets out of git
+.env
+.env.local
+
+# Firebase config - contains project identifiers
+google-services.json
+GoogleService-Info.plist
