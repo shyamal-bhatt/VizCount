@@ -10,6 +10,7 @@ import '../global.css';
 import { useColorScheme } from '@/components/useColorScheme';
 import { DatabaseProvider } from '@nozbe/watermelondb/DatabaseProvider';
 import { database } from '@/db';
+import { seedDefinedProducts } from '@/db/seed';
 
 export {
   // Catch any errors thrown by the Layout component.
@@ -60,6 +61,7 @@ export default function RootLayout() {
   useEffect(() => {
     if (loaded) {
       SplashScreen.hideAsync();
+      seedDefinedProducts();
     }
   }, [loaded]);
 

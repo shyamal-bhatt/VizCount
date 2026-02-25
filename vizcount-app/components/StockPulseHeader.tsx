@@ -1,54 +1,25 @@
-import React, { useState, useEffect } from 'react';
-import { View, Text, TouchableOpacity, Platform, Pressable } from 'react-native';
-import { MaterialCommunityIcons, Feather, FontAwesome } from '@expo/vector-icons';
-import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
+import React, { useState } from 'react';
+import { View, Text, TouchableOpacity, Pressable } from 'react-native';
+import { MaterialCommunityIcons, Feather } from '@expo/vector-icons';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useColorScheme } from 'nativewind';
-import { ProductPickerModal, Product } from './ProductPickerModal';
-import { database } from '@/db';
-import { ScannedItem } from '@/db/models/ScannedItem';
+import { ProductPickerModal } from './ProductPickerModal';
+import { ProductDefinitionModal } from './ProductDefinitionModal';
+import { useProductFilter } from '@/context/ProductFilterContext';
 
 export function StockPulseHeader() {
     const insets = useSafeAreaInsets();
     const { colorScheme, toggleColorScheme } = useColorScheme();
     const isDark = colorScheme === 'dark';
 
-    // Header Product Picker State
+    const { selectedProduct, setSelectedProduct, definedProducts } = useProductFilter();
+
     const [isProductModalVisible, setIsProductModalVisible] = useState(false);
-    const [selectedProduct, setSelectedProduct] = useState<Product | 'All'>('All');
-    const [availableProducts, setAvailableProducts] = useState<Product[]>([]);
+    const [isDefModalVisible, setIsDefModalVisible] = useState(false);
 
-    const fetchProducts = async () => {
-        try {
-            const itemsCollection = database.collections.get<ScannedItem>('scanned_items');
-            const allItems = await itemsCollection.query().fetch();
-
-            // Get unique products by PID
-            const uniqueProductsMap = new Map<number, Product>();
-            allItems.forEach(item => {
-                if (!uniqueProductsMap.has(item.pid)) {
-                    uniqueProductsMap.set(item.pid, { pid: item.pid, name: item.name });
-                }
-            });
-
-            setAvailableProducts(Array.from(uniqueProductsMap.values()));
-        } catch (error) {
-            console.error("Failed to load products for header:", error);
-        }
-    };
-
-    // Initial fetch
-    useEffect(() => {
-        fetchProducts();
-    }, []);
-
-    // Also listen to database changes on scanned_items to auto-update the list
-    useEffect(() => {
-        const subscription = database.collections.get('scanned_items').changes.subscribe(() => {
-            fetchProducts();
-        });
-
-        return () => subscription.unsubscribe();
-    }, []);
+    const displayLabel = selectedProduct === 'All'
+        ? 'All'
+        : selectedProduct?.name ?? 'All';
 
     return (
         <View
@@ -68,17 +39,26 @@ export function StockPulseHeader() {
 
             {/* Right side: Actions */}
             <View className="flex-row items-center space-x-3 gap-3">
-                {/* Department Selector */}
+                {/* Product Definition Button */}
+                <TouchableOpacity
+                    onPress={() => setIsDefModalVisible(true)}
+                    className="w-10 h-10 rounded-xl bg-gray-100 dark:bg-[#1D2125] border border-gray-200 dark:border-[#30363D] items-center justify-center"
+                >
+                    <Feather name="tag" size={18} color={isDark ? "#E1E3E6" : "#4B5563"} />
+                </TouchableOpacity>
+
+                <ProductDefinitionModal
+                    visible={isDefModalVisible}
+                    onClose={() => setIsDefModalVisible(false)}
+                />
+
+                {/* Product Filter Dropdown — uses defined_products via context */}
                 <TouchableOpacity
                     onPress={() => setIsProductModalVisible(true)}
                     className="flex-row items-center bg-gray-100 dark:bg-[#1D2125] border border-gray-200 dark:border-[#30363D] rounded-lg px-3 py-2"
                 >
                     <Text className="text-gray-800 dark:text-gray-300 text-sm font-medium mr-2">
-                        {availableProducts.length === 0
-                            ? '---'
-                            : selectedProduct === 'All'
-                                ? 'All'
-                                : selectedProduct?.name || 'All'}
+                        {definedProducts.length === 0 ? '---' : displayLabel}
                     </Text>
                     <Feather name="chevron-down" size={16} color={isDark ? "#8B949E" : "#6B7280"} />
                 </TouchableOpacity>
@@ -86,14 +66,14 @@ export function StockPulseHeader() {
                 <ProductPickerModal
                     visible={isProductModalVisible}
                     onClose={() => setIsProductModalVisible(false)}
-                    products={availableProducts}
-                    onSelect={setSelectedProduct}
+                    products={definedProducts}
+                    onSelect={(p) => setSelectedProduct(p === 'All' ? 'All' : p)}
                     showAllOption={true}
                 />
 
                 {/* Dashboard Button */}
                 <TouchableOpacity className="flex-row items-center bg-transparent border border-gray-200 dark:border-[#30363D] rounded-lg px-3 py-2">
-                    <Feather name="external-link" size={14} color={isDark ? "#E1E3E6" : "#4B5563"} className="mr-2" style={{ marginRight: 6 }} />
+                    <Feather name="external-link" size={14} color={isDark ? "#E1E3E6" : "#4B5563"} style={{ marginRight: 6 }} />
                     <Text className="text-gray-800 dark:text-white text-sm font-medium">Dashboard</Text>
                 </TouchableOpacity>
             </View>

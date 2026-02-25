@@ -6,6 +6,7 @@ import { Platform } from 'react-native'
 import schema from './schema'
 import { ScannedItem } from './models/ScannedItem'
 import { SalesFloor } from './models/SalesFloor'
+import { DefinedProduct } from './models/DefinedProduct'
 
 // @ts-ignore: expo-file-system types might be slightly off with legacy deps
 const docDir = FileSystem.documentDirectory;
@@ -33,5 +34,6 @@ export const database = new Database({
     modelClasses: [
         ScannedItem,
         SalesFloor,
+        DefinedProduct,
     ],
 })

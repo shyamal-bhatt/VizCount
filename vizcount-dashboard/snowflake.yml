@@ -1,0 +1,8 @@
+definition_version: 1
+
+streamlit:
+  name: vizcount_dashboard
+  stage: streamlit_stage
+  query_warehouse: COMPUTE_WH
+  main_file: app.py
+  title: "VizCount Dashboard"

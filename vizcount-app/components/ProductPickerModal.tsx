@@ -1,5 +1,5 @@
 import React, { useState, useMemo } from 'react';
-import { View, Text, Modal, TouchableOpacity, ScrollView, Platform, SafeAreaView } from 'react-native';
+import { View, Text, Modal, TouchableOpacity, ScrollView, Platform, TextInput } from 'react-native';
 import { Feather } from '@expo/vector-icons';
 import { useColorScheme } from 'nativewind';
 
@@ -25,12 +25,22 @@ export function ProductPickerModal({
 }: ProductPickerModalProps) {
     const { colorScheme } = useColorScheme();
     const isDark = colorScheme === 'dark';
+    const [searchQuery, setSearchQuery] = useState('');
 
-    // Group products by their first word (e.g., "Chk", "Beef", "Pork")
+    const filteredProducts = useMemo(() => {
+        const q = searchQuery.toLowerCase().trim();
+        if (!q) return products;
+        return products.filter(p =>
+            p.name.toLowerCase().includes(q) ||
+            p.pid.toString().includes(q)
+        );
+    }, [products, searchQuery]);
+
+    // Group products by their first word (e.g., "ML", "MINA", "PRIME")
     const groupedProducts = useMemo(() => {
         const groups: Record<string, Product[]> = {};
 
-        products.forEach(product => {
+        filteredProducts.forEach(product => {
             const firstWord = product.name.split(' ')[0] || 'Other';
             if (!groups[firstWord]) {
                 groups[firstWord] = [];
@@ -46,9 +56,8 @@ export function ProductPickerModal({
         });
 
         return groups;
-    }, [products]);
+    }, [filteredProducts]);
 
-    // Format section headers
     const sectionNames = Object.keys(groupedProducts).sort();
 
     return (
@@ -57,7 +66,10 @@ export function ProductPickerModal({
             animationType="slide"
             presentationStyle={Platform.OS === 'ios' ? 'pageSheet' : 'overFullScreen'}
             transparent={Platform.OS !== 'ios'}
-            onRequestClose={onClose}
+            onRequestClose={() => {
+                setSearchQuery('');
+                onClose();
+            }}
         >
             <View className="flex-1 bg-black/50 justify-end">
                 <View className="bg-brand-light dark:bg-brand-dark rounded-t-3xl mt-20 flex-1 overflow-hidden h-[80%]">
@@ -65,28 +77,50 @@ export function ProductPickerModal({
                     <View className="flex-row items-center justify-between px-6 py-4 border-b border-gray-200 dark:border-brand-card bg-brand-light dark:bg-brand-dark">
                         <Text className="text-xl font-bold text-gray-900 dark:text-white">Select Product</Text>
                         <TouchableOpacity
-                            onPress={onClose}
+                            onPress={() => { setSearchQuery(''); onClose(); }}
                             className="w-8 h-8 rounded-full bg-gray-100 dark:bg-brand-card items-center justify-center"
                         >
                             <Feather name="x" size={20} color={isDark ? '#E1E3E6' : '#4B5563'} />
                         </TouchableOpacity>
                     </View>
 
+                    {/* Search Bar */}
+                    <View className="px-4 pt-3 pb-1">
+                        <View className="flex-row items-center bg-gray-100 dark:bg-[#1D2125] border border-gray-200 dark:border-[#30363D] rounded-xl px-3">
+                            <Feather name="search" size={16} color={isDark ? '#8B949E' : '#9CA3AF'} style={{ marginRight: 8 }} />
+                            <TextInput
+                                className="flex-1 py-3 text-gray-900 dark:text-white text-sm"
+                                placeholder="Search by name or PID..."
+                                placeholderTextColor={isDark ? '#8B949E' : '#9CA3AF'}
+                                value={searchQuery}
+                                onChangeText={setSearchQuery}
+                                returnKeyType="search"
+                                autoCapitalize="none"
+                            />
+                            {searchQuery.length > 0 && (
+                                <TouchableOpacity onPress={() => setSearchQuery('')}>
+                                    <Feather name="x-circle" size={16} color={isDark ? '#8B949E' : '#9CA3AF'} />
+                                </TouchableOpacity>
+                            )}
+                        </View>
+                    </View>
+
                     {/* Content */}
                     <ScrollView className="flex-1 px-4 py-2">
-                        {products.length === 0 ? (
+                        {filteredProducts.length === 0 ? (
                             <View className="py-20 items-center justify-center">
-                                <Feather name="package" size={48} color={isDark ? '#30363D' : '#D1D5DB'} className="mb-4" />
+                                <Feather name="package" size={48} color={isDark ? '#30363D' : '#D1D5DB'} style={{ marginBottom: 12 }} />
                                 <Text className="text-gray-500 dark:text-brand-muted text-lg text-center font-medium">
-                                    No products scanned yet.
+                                    {searchQuery ? 'No matching products.' : 'No products defined yet.'}
                                 </Text>
                             </View>
                         ) : (
                             <>
-                                {showAllOption && (
+                                {showAllOption && !searchQuery && (
                                     <TouchableOpacity
                                         onPress={() => {
                                             onSelect('All');
+                                            setSearchQuery('');
                                             onClose();
                                         }}
                                         className="py-4 border-b border-gray-100 dark:border-brand-card flex-row items-center justify-between"
@@ -107,11 +141,12 @@ export function ProductPickerModal({
                                                     key={product.pid}
                                                     onPress={() => {
                                                         onSelect(product);
+                                                        setSearchQuery('');
                                                         onClose();
                                                     }}
                                                     className={`py-4 px-4 flex-row items-center justify-between ${index < groupedProducts[section].length - 1
-                                                            ? 'border-b border-gray-200 dark:border-brand-card'
-                                                            : ''
+                                                        ? 'border-b border-gray-200 dark:border-brand-card'
+                                                        : ''
                                                         }`}
                                                 >
                                                     <View>
