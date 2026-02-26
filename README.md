@@ -35,6 +35,70 @@ VizCount/
 
 ---
 
+## OCR Pipeline — 10-Stage Frame Processor
+
+> Runs inside a Vision Camera `useFrameProcessor` worklet at ~3 FPS. Stages 1–7 execute on the **Worklet thread**; Stages 7b–10 cross to the **JS thread** via `useRunOnJS`.
+
+```
+Frame in
+  │
+  ▼ [Worklet]
+Stage 1 ─ Throttle Gate ──────── skip if < 300 ms since last OCR
+Stage 2 ─ Quality Gate ────────── OpenCV Laplacian blur variance + brightness
+           │ blur < 80 → "Hold steady"
+           │ brightness > 220 → "Glare detected"
+           └ brightness < 40  → "Too dark"
+Stage 3 ─ MLKit OCR ───────────── scanText(frame) → raw blocks
+Stage 4 ─ ROI Spatial Filter ──── per-line centre mapped to screen coords
+           confidence < 0.8 rejected; outside ROI rect rejected
+Stage 5 ─ Field Extraction ─────── regex on each valid line independently
+           PID  : explicit "PID: 12345" OR bare 5-9 digit line
+           NetKg: "net 6.42kg" / "6.42kg" / "net 14.15Lb" → Lb×0.453592
+                  all values normalised to 2 dp before buffering
+Stage 6 ─ Temporal Stabilization ─ rolling buffer (max 5) per field
+           value stable when it appears ≥ 3/5 times (majority consensus)
+Stage 7 ─ Record Combiner ──────── requires stablePID + stableNetKg
+           duplicate guard: skip if same PID was just saved
+  │
+  ▼ [JS Thread via useRunOnJS]
+Stage 7a ─ Product Lookup ──────── query defined_products WHERE pid=stablePID
+            not found → 🔴 toast "PID not in catalog" + warning haptic
+            found     → { name, type, pack } + 🔵 toast "found — reading…"
+Stage 7b ─ Smart SN Extraction ─── type-dependent:
+            Chicken  → /\b(\d{14})\b/ near "HU" marker
+            Beef/Pork→ /S\/N\s*(\d{12})/i or bare 12-digit
+            Other    → AUTO-{timestamp}
+Stage 7c ─ Date Parsing ────────── scans all ROI lines for dates:
+            DD/MM/YY · YYYY-MM-DD · DD-MMM-YY · YYYYMON DD (Cargill)
+            2 dates found → smaller=packedOnDate, larger=bestBeforeDate
+Stage 7d ─ Duplicate SN Check ──── query scanned_items WHERE sn=parsedSN
+            exists → 🟡 toast "Already counted"
+Stage 8  ─ Save ────────────────── INSERT into scanned_items
+            { pid, name, netKg, sn, count=pack, bestBeforeDate, packedOnDate }
+Stage 9  ─ Scan Lock ───────────── 1.5 s cooldown, clears all field buffers
+Stage 10 ─ User Feedback ───────── 🟢 toast "Recorded" + success haptic
+                                    green ROI border flash
+```
+
+### Product Type → SN Rules
+
+| Type | Pattern | Length | Notes |
+|---|---|---|---|
+| Chicken | `/\b(\d{14})\b/` | 14 digits | Validated near `HU` marker |
+| Beef / Pork | `/S\/N\s*(\d{12})/i` → bare `/\b(\d{12})\b/` | 12 digits | `S/N` explicit prefix first |
+| Seafood / Halal / Other | `AUTO-{timestamp}` | — | No known format yet |
+
+### Scan Toast States
+
+| State | Colour | Trigger |
+|---|---|---|
+| `info` – reading | Sky blue | PID found in catalog |
+| `success` – recorded | Emerald | Item saved to WatermelonDB |
+| `warning` – duplicate | Amber | SN already in `scanned_items` |
+| `error` – unknown | Red | PID not in `defined_products` |
+
+---
+
 ## Diagram 1 — System Architecture
 
 > End-to-end data flow from the device camera through to the management dashboard.

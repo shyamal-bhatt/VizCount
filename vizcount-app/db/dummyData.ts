@@ -18,6 +18,36 @@ const CATALOG = [
     { name: 'Pork Chops', pid: 96021, weightRange: [8, 12], count: 12, meatType: 'Pork' },
     { name: 'Pork Ribs', pid: 96022, weightRange: [10, 15], count: 10, meatType: 'Pork' },
     { name: 'Pork Belly', pid: 96023, weightRange: [20, 25], count: 4, meatType: 'Pork' },
+
+    // -- Seafood --
+    { name: 'COHO 2PC PORTIONS', pid: 50571637, weightRange: [8, 14], count: 6, meatType: 'Seafood' },
+    { name: 'YFM BASA FILLET', pid: 31237250, weightRange: [6, 12], count: 6, meatType: 'Seafood' },
+
+    // -- Halal --
+    { name: 'GOAT CUBES BONE IN', pid: 31710966, weightRange: [10, 18], count: 12, meatType: 'Halal' },
+
+    // -- Beef (Catalogue) --
+    { name: 'AA STRIPLOIN STEAK', pid: 50772502, weightRange: [18, 26], count: 8, meatType: 'Beef' },
+    { name: 'AA TRI TIP', pid: 50772503, weightRange: [14, 22], count: 8, meatType: 'Beef' },
+    { name: 'AA BLADE STEAK', pid: 50772504, weightRange: [12, 20], count: 8, meatType: 'Beef' },
+    { name: 'BF TRI TIP SIRLOIN', pid: 50158149, weightRange: [14, 22], count: 8, meatType: 'Beef' },
+    { name: 'BFSTK SRLN TIP C11YF', pid: 30062738, weightRange: [10, 18], count: 6, meatType: 'Beef' },
+    { name: 'BFSTK INSD RND C05YF', pid: 31742690, weightRange: [12, 20], count: 8, meatType: 'Beef' },
+    { name: 'BFRST INSD BLD C09YF', pid: 30512733, weightRange: [14, 24], count: 8, meatType: 'Beef' },
+
+    // -- Pork (Catalogue) --
+    { name: 'PKSSG BR MAPLE 900ML', pid: 31439394, weightRange: [8, 14], count: 6, meatType: 'Pork' },
+    { name: 'PKSSG BR MAPLE 375JV', pid: 50576420, weightRange: [4, 8], count: 12, meatType: 'Pork' },
+    { name: 'PKSSG BR ORIG 375JV', pid: 50576421, weightRange: [4, 8], count: 12, meatType: 'Pork' },
+    { name: 'PKSSG BR RND 250JV', pid: 50576425, weightRange: [2, 6], count: 8, meatType: 'Pork' },
+    { name: 'PKSSG BR ORIG 900ML', pid: 30347833, weightRange: [8, 14], count: 6, meatType: 'Pork' },
+    { name: 'PKSSG BR ORIG 375ML', pid: 30010520, weightRange: [3, 7], count: 8, meatType: 'Pork' },
+    { name: 'PKSSG BR MAPLE 375ML', pid: 30010521, weightRange: [3, 7], count: 8, meatType: 'Pork' },
+    { name: 'JVL BWN SUG HON', pid: 50576373, weightRange: [2, 5], count: 12, meatType: 'Pork' },
+    { name: 'PKSSG DN MLDIT 500JV', pid: 50576422, weightRange: [4, 8], count: 12, meatType: 'Pork' },
+    { name: 'PKSSG DN HOTIT 500JV', pid: 50576423, weightRange: [4, 8], count: 12, meatType: 'Pork' },
+    { name: 'PKSSG DN BRAT 500JV', pid: 50576424, weightRange: [4, 8], count: 12, meatType: 'Pork' },
+    { name: 'PKSSG GR MLDIT 454JV', pid: 50576427, weightRange: [3, 7], count: 8, meatType: 'Pork' },
 ];
 
 function getRandomInt(min: number, max: number) {
