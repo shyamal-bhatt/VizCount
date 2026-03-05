@@ -7,7 +7,7 @@ import { useEffect } from 'react';
 import 'react-native-reanimated';
 import '../global.css';
 
-import { useColorScheme } from '@/components/useColorScheme';
+import { useColorScheme } from 'nativewind';
 import { DatabaseProvider } from '@nozbe/watermelondb/DatabaseProvider';
 import { database } from '@/db';
 import { seedDefinedProducts } from '@/db/seed';
@@ -73,7 +73,7 @@ export default function RootLayout() {
 }
 
 function RootLayoutNav() {
-  const colorScheme = useColorScheme();
+  const { colorScheme } = useColorScheme();
 
   return (
     // @ts-ignore: WatermelonDB typings are slightly behind React 18 JSX types

@@ -6,6 +6,7 @@ import { useColorScheme } from 'nativewind';
 export interface Product {
     pid: number;
     name: string;
+    type: string;
 }
 
 interface ProductPickerModalProps {
@@ -36,21 +37,19 @@ export function ProductPickerModal({
         );
     }, [products, searchQuery]);
 
-    // Group products by their first word (e.g., "ML", "MINA", "PRIME")
+    // Group products by their type (Beef, Pork, Seafood, Halal, etc.)
     const groupedProducts = useMemo(() => {
         const groups: Record<string, Product[]> = {};
 
         filteredProducts.forEach(product => {
-            const firstWord = product.name.split(' ')[0] || 'Other';
-            if (!groups[firstWord]) {
-                groups[firstWord] = [];
-            }
-            if (!groups[firstWord].find(p => p.pid === product.pid)) {
-                groups[firstWord].push(product);
+            const key = product.type || 'Other';
+            if (!groups[key]) groups[key] = [];
+            if (!groups[key].find(p => p.pid === product.pid)) {
+                groups[key].push(product);
             }
         });
 
-        // Ensure each group is sorted by name
+        // Sort products alphabetically within each group
         Object.keys(groups).forEach(key => {
             groups[key].sort((a, b) => a.name.localeCompare(b.name));
         });

@@ -87,7 +87,6 @@ function generateRandomDates() {
     const bestBeforeDate = new Date(now.getTime() + daysToExpiry * 24 * 60 * 60 * 1000);
 
     return {
-        packedOnDate: packedOnDate.getTime(),
         bestBeforeDate: bestBeforeDate.getTime(),
     };
 }
@@ -116,7 +115,7 @@ export async function wipeAndGenerateDummyData(count: number = 600) {
             for (let i = 0; i < count; i++) {
                 const itemConfig = CATALOG[getRandomInt(0, CATALOG.length - 1)];
                 const weight = getRandomFloat(itemConfig.weightRange[0], itemConfig.weightRange[1]);
-                const { packedOnDate, bestBeforeDate } = generateRandomDates();
+                const { bestBeforeDate } = generateRandomDates();
 
                 currentSn++;
 
@@ -127,7 +126,6 @@ export async function wipeAndGenerateDummyData(count: number = 600) {
                         item.name = itemConfig.name;
                         item.netKg = weight;
                         item.count = itemConfig.count;
-                        item.packedOnDate = packedOnDate;
                         item.bestBeforeDate = bestBeforeDate;
                     })
                 );

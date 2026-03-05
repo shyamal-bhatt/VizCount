@@ -5,6 +5,7 @@ import { DefinedProduct } from '@/db/models/DefinedProduct';
 export interface SelectedProduct {
     pid: number;
     name: string;
+    type: string;
 }
 
 interface ProductFilterContextType {
@@ -27,7 +28,7 @@ export function ProductFilterProvider({ children }: { children: ReactNode }) {
         try {
             const collection = database.collections.get<DefinedProduct>('defined_products');
             const all = await collection.query().fetch();
-            setDefinedProducts(all.map(p => ({ pid: p.pid, name: p.name })));
+            setDefinedProducts(all.map(p => ({ pid: p.pid, name: p.name, type: p.type })));
         } catch (e) {
             console.error('[ProductFilter] Failed to load defined products', e);
         }

@@ -6,6 +6,7 @@ export class DefinedProduct extends Model {
 
     @field('name') name!: string
     @field('pid') pid!: number
+    @field('gtin') gtin?: number
     @field('pack') pack!: number
     @field('type') type!: string
 

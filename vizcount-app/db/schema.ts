@@ -1,7 +1,7 @@
 import { appSchema, tableSchema } from '@nozbe/watermelondb'
 
 export default appSchema({
-    version: 4,
+    version: 5,
     tables: [
         tableSchema({
             name: 'scanned_items',
@@ -10,7 +10,6 @@ export default appSchema({
                 { name: 'sn', type: 'number', isIndexed: true },
                 { name: 'name', type: 'string' },
                 { name: 'best_before_date', type: 'number', isOptional: true },
-                { name: 'packed_on_date', type: 'number', isOptional: true },
                 { name: 'net_kg', type: 'number', isOptional: true },
                 { name: 'count', type: 'number', isOptional: true },
                 { name: 'created_at', type: 'number' },
@@ -34,6 +33,7 @@ export default appSchema({
             columns: [
                 { name: 'name', type: 'string' },
                 { name: 'pid', type: 'number', isIndexed: true },
+                { name: 'gtin', type: 'number', isIndexed: true, isOptional: true },
                 { name: 'pack', type: 'number' },
                 { name: 'type', type: 'string' },
                 { name: 'created_at', type: 'number' },

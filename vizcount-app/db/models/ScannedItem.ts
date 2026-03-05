@@ -8,7 +8,6 @@ export class ScannedItem extends Model {
     @field('sn') sn!: number
     @text('name') name!: string
     @field('best_before_date') bestBeforeDate!: number | null
-    @field('packed_on_date') packedOnDate!: number | null
     @field('net_kg') netKg!: number | null
     @field('count') count!: number | null
     @readonly @date('created_at') createdAt!: Date
