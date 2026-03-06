@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { View, Text, Pressable, LayoutAnimation, Platform, UIManager } from 'react-native';
 import { MaterialCommunityIcons, Feather } from '@expo/vector-icons';
+import { Swipeable } from 'react-native-gesture-handler';
 import { useColorScheme } from 'nativewind';
 import { RotationAlert } from '../useExpiryDB';
 
@@ -27,6 +28,12 @@ export function RotationAlertBanner({ alerts }: RotationAlertBannerProps) {
 
     if (alerts.length === 0) return null;
 
+    const [resolvedAlerts, setResolvedAlerts] = useState<Set<string>>(new Set());
+
+    const activeAlerts = alerts.filter(a => !resolvedAlerts.has(a.pid.toString()));
+
+    if (activeAlerts.length === 0) return null;
+
     const AMBER = '#F59E0B';
     const AMBER_BG = isDark ? '#2D2100' : '#FFFBEB';
     const AMBER_BORDER = isDark ? '#92400E' : '#FDE68A';
@@ -35,6 +42,47 @@ export function RotationAlertBanner({ alerts }: RotationAlertBannerProps) {
         LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
         setExpanded((prev) => !prev);
     };
+
+    const handleResolve = (pid: number) => {
+        LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
+        setResolvedAlerts(prev => new Set(prev).add(pid.toString()));
+    };
+
+    const renderRightActions = (pid: number) => (
+        <Pressable
+            onPress={() => handleResolve(pid)}
+            style={{
+                backgroundColor: '#10B981',
+                justifyContent: 'center',
+                alignItems: 'center',
+                width: 70,
+                marginVertical: 4,
+                borderTopRightRadius: 12,
+                borderBottomRightRadius: 12,
+            }}
+        >
+            <Feather name="check-circle" size={24} color="white" />
+            <Text style={{ color: 'white', fontSize: 10, fontWeight: '700', marginTop: 4 }}>Resolve</Text>
+        </Pressable>
+    );
+
+    const renderLeftActions = (pid: number) => (
+        <Pressable
+            onPress={() => handleResolve(pid)}
+            style={{
+                backgroundColor: '#10B981',
+                justifyContent: 'center',
+                alignItems: 'center',
+                width: 70,
+                marginVertical: 4,
+                borderTopLeftRadius: 12,
+                borderBottomLeftRadius: 12,
+            }}
+        >
+            <Feather name="check-circle" size={24} color="white" />
+            <Text style={{ color: 'white', fontSize: 10, fontWeight: '700', marginTop: 4 }}>Resolve</Text>
+        </Pressable>
+    );
 
     return (
         <View
@@ -96,7 +144,7 @@ export function RotationAlertBanner({ alerts }: RotationAlertBannerProps) {
                         }}
                     >
                         <Text style={{ color: AMBER, fontWeight: '800', fontSize: 12 }}>
-                            {alerts.length}
+                            {activeAlerts.length}
                         </Text>
                     </View>
                     <Feather
@@ -135,88 +183,95 @@ export function RotationAlertBanner({ alerts }: RotationAlertBannerProps) {
                     </View>
 
                     {/* Per-product cards */}
-                    {alerts.map((alert) => (
-                        <View
+                    {activeAlerts.map((alert) => (
+                        <Swipeable
                             key={`rotation-${alert.pid}`}
-                            style={{
-                                backgroundColor: isDark ? '#1A1400' : '#FFFFFF',
-                                borderWidth: 1,
-                                borderColor: AMBER_BORDER,
-                                borderRadius: 12,
-                                padding: 12,
-                            }}
+                            renderRightActions={() => renderRightActions(alert.pid)}
+                            renderLeftActions={() => renderLeftActions(alert.pid)}
+                            overshootRight={false}
+                            overshootLeft={false}
                         >
-                            {/* Product name + PID */}
-                            <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
-                                <Text
-                                    style={{ color: isDark ? '#E1E3E6' : '#111827', fontWeight: '700', fontSize: 14 }}
-                                    numberOfLines={1}
-                                >
-                                    {alert.name}
-                                </Text>
-                                <View
-                                    style={{
-                                        backgroundColor: `${AMBER}20`,
-                                        borderRadius: 6,
-                                        paddingHorizontal: 7,
-                                        paddingVertical: 2,
-                                    }}
-                                >
-                                    <Text style={{ color: AMBER, fontSize: 10, fontWeight: '700' }}>
-                                        PID {alert.pid}
+                            <View
+                                style={{
+                                    backgroundColor: isDark ? '#1A1400' : '#FFFFFF',
+                                    borderWidth: 1,
+                                    borderColor: AMBER_BORDER,
+                                    borderRadius: 12,
+                                    padding: 12,
+                                }}
+                            >
+                                {/* Product name + PID */}
+                                <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
+                                    <Text
+                                        style={{ color: isDark ? '#E1E3E6' : '#111827', fontWeight: '700', fontSize: 14 }}
+                                        numberOfLines={1}
+                                    >
+                                        {alert.name}
                                     </Text>
+                                    <View
+                                        style={{
+                                            backgroundColor: `${AMBER}20`,
+                                            borderRadius: 6,
+                                            paddingHorizontal: 7,
+                                            paddingVertical: 2,
+                                        }}
+                                    >
+                                        <Text style={{ color: AMBER, fontSize: 10, fontWeight: '700' }}>
+                                            PID {alert.pid}
+                                        </Text>
+                                    </View>
+                                </View>
+
+                                {/* Timeline: cooler → floor */}
+                                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                                    {/* Cooler date */}
+                                    <View
+                                        style={{
+                                            flex: 1,
+                                            backgroundColor: '#60A5FA18',
+                                            borderWidth: 1,
+                                            borderColor: '#60A5FA40',
+                                            borderRadius: 8,
+                                            padding: 8,
+                                            alignItems: 'center',
+                                        }}
+                                    >
+                                        <Text style={{ fontSize: 14, marginBottom: 2 }}>❄️</Text>
+                                        <Text style={{ color: '#60A5FA', fontWeight: '700', fontSize: 12 }}>
+                                            {formatShortDate(alert.coolerDate)}
+                                        </Text>
+                                        <Text style={{ color: '#60A5FA', opacity: 0.7, fontSize: 10 }}>Cooler</Text>
+                                    </View>
+
+                                    {/* Arrow + day diff */}
+                                    <View style={{ alignItems: 'center', gap: 2 }}>
+                                        <Feather name="arrow-right" size={14} color={AMBER} />
+                                        <Text style={{ color: AMBER, fontSize: 9, fontWeight: '700' }}>
+                                            +{alert.daysDiff}d
+                                        </Text>
+                                    </View>
+
+                                    {/* Floor date */}
+                                    <View
+                                        style={{
+                                            flex: 1,
+                                            backgroundColor: '#34D39918',
+                                            borderWidth: 1,
+                                            borderColor: '#34D39940',
+                                            borderRadius: 8,
+                                            padding: 8,
+                                            alignItems: 'center',
+                                        }}
+                                    >
+                                        <Text style={{ fontSize: 14, marginBottom: 2 }}>🏪</Text>
+                                        <Text style={{ color: '#34D399', fontWeight: '700', fontSize: 12 }}>
+                                            {formatShortDate(alert.floorDate)}
+                                        </Text>
+                                        <Text style={{ color: '#34D399', opacity: 0.7, fontSize: 10 }}>Floor</Text>
+                                    </View>
                                 </View>
                             </View>
-
-                            {/* Timeline: cooler → floor */}
-                            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                                {/* Cooler date */}
-                                <View
-                                    style={{
-                                        flex: 1,
-                                        backgroundColor: '#60A5FA18',
-                                        borderWidth: 1,
-                                        borderColor: '#60A5FA40',
-                                        borderRadius: 8,
-                                        padding: 8,
-                                        alignItems: 'center',
-                                    }}
-                                >
-                                    <Text style={{ fontSize: 14, marginBottom: 2 }}>❄️</Text>
-                                    <Text style={{ color: '#60A5FA', fontWeight: '700', fontSize: 12 }}>
-                                        {formatShortDate(alert.coolerDate)}
-                                    </Text>
-                                    <Text style={{ color: '#60A5FA', opacity: 0.7, fontSize: 10 }}>Cooler</Text>
-                                </View>
-
-                                {/* Arrow + day diff */}
-                                <View style={{ alignItems: 'center', gap: 2 }}>
-                                    <Feather name="arrow-right" size={14} color={AMBER} />
-                                    <Text style={{ color: AMBER, fontSize: 9, fontWeight: '700' }}>
-                                        +{alert.daysDiff}d
-                                    </Text>
-                                </View>
-
-                                {/* Floor date */}
-                                <View
-                                    style={{
-                                        flex: 1,
-                                        backgroundColor: '#34D39918',
-                                        borderWidth: 1,
-                                        borderColor: '#34D39940',
-                                        borderRadius: 8,
-                                        padding: 8,
-                                        alignItems: 'center',
-                                    }}
-                                >
-                                    <Text style={{ fontSize: 14, marginBottom: 2 }}>🏪</Text>
-                                    <Text style={{ color: '#34D399', fontWeight: '700', fontSize: 12 }}>
-                                        {formatShortDate(alert.floorDate)}
-                                    </Text>
-                                    <Text style={{ color: '#34D399', opacity: 0.7, fontSize: 10 }}>Floor</Text>
-                                </View>
-                            </View>
-                        </View>
+                        </Swipeable>
                     ))}
                 </View>
             )}

@@ -6,7 +6,9 @@ import {
     Pressable,
     Dimensions,
     Platform,
+    Modal,
 } from 'react-native';
+import { MaterialCommunityIcons, Feather } from '@expo/vector-icons';
 import { useColorScheme } from 'nativewind';
 import { ExpiryItem } from '../useExpiryDB';
 
@@ -78,6 +80,11 @@ export function ExpiryRibbon({ items, onSelectItem }: ExpiryRibbonProps) {
     const { colorScheme } = useColorScheme();
     const isDark = colorScheme === 'dark';
 
+    // State for the "+X more" modal
+    const [modalVisible, setModalVisible] = React.useState(false);
+    const [selectedDayItems, setSelectedDayItems] = React.useState<ExpiryItem[]>([]);
+    const [selectedDayOffset, setSelectedDayOffset] = React.useState<number>(0);
+
     // Group items by day offset (0-14). Items past due go into day 0 column.
     const itemsByDay = React.useMemo(() => {
         const map: Record<number, ExpiryItem[]> = {};
@@ -125,6 +132,62 @@ export function ExpiryRibbon({ items, onSelectItem }: ExpiryRibbonProps) {
                     </Text>
                 </View>
             </View>
+
+            {/* +X More Modal */}
+            <Modal
+                animationType="slide"
+                transparent={true}
+                visible={modalVisible}
+                onRequestClose={() => setModalVisible(false)}
+            >
+                <View className="flex-1 justify-end bg-black/50">
+                    <View className="bg-white dark:bg-[#1D2125] rounded-t-3xl min-h-[50%] max-h-[80%] p-6">
+                        <View className="flex-row justify-between items-center mb-6">
+                            <View>
+                                <Text className="text-xl font-bold text-gray-900 dark:text-white">
+                                    {getDayLabel(selectedDayOffset)}
+                                </Text>
+                                <Text className="text-sm text-gray-500 dark:text-gray-400 mt-1">
+                                    {selectedDayItems.length} items expiring
+                                </Text>
+                            </View>
+                            <Pressable
+                                onPress={() => setModalVisible(false)}
+                                className="bg-gray-100 dark:bg-[#30363D] p-2 rounded-full"
+                            >
+                                <Feather name="x" size={20} color={isDark ? "#E1E3E6" : "#4B5563"} />
+                            </Pressable>
+                        </View>
+
+                        <ScrollView showsVerticalScrollIndicator={false}>
+                            {selectedDayItems.map((item) => (
+                                <Pressable
+                                    key={item.id}
+                                    onPress={() => {
+                                        setModalVisible(false);
+                                        onSelectItem(item);
+                                    }}
+                                    className="flex-row items-center justify-between py-3 border-b border-gray-100 dark:border-[#30363D]"
+                                >
+                                    <View className="flex-1">
+                                        <Text className="text-base font-bold text-gray-900 dark:text-white mb-1">
+                                            {item.name}
+                                        </Text>
+                                        <Text className="text-xs text-gray-500 dark:text-gray-400">
+                                            PID: {item.pid}
+                                        </Text>
+                                    </View>
+                                    <View className={`px-2 py-1 rounded-md ${item.source === 'cooler' ? 'bg-blue-100 dark:bg-blue-900/30' : 'bg-green-100 dark:bg-green-900/30'}`}>
+                                        <Text className={`text-xs font-bold ${item.source === 'cooler' ? 'text-blue-600 dark:text-blue-400' : 'text-green-600 dark:text-green-400'}`}>
+                                            {item.source === 'cooler' ? 'Cooler' : 'Floor'}
+                                        </Text>
+                                    </View>
+                                </Pressable>
+                            ))}
+                        </ScrollView>
+                    </View>
+                </View>
+            </Modal>
 
             {/* Ribbon container */}
             <View
@@ -210,17 +273,26 @@ export function ExpiryRibbon({ items, onSelectItem }: ExpiryRibbonProps) {
                                     ))}
 
                                     {extraCount > 0 && (
-                                        <View
+                                        <Pressable
+                                            onPress={() => {
+                                                setSelectedDayItems(dayItems);
+                                                setSelectedDayOffset(dayOffset);
+                                                setModalVisible(true);
+                                            }}
                                             style={{
                                                 height: CHIP_HEIGHT,
                                                 justifyContent: 'center',
                                                 alignItems: 'center',
+                                                backgroundColor: `${chipColor}10`,
+                                                borderRadius: 8,
+                                                borderWidth: 1,
+                                                borderColor: `${chipColor}30`,
                                             }}
                                         >
-                                            <Text style={{ color: chipColor, fontSize: 10, fontWeight: '700' }}>
+                                            <Text style={{ color: chipColor, fontSize: 10, fontWeight: '800' }}>
                                                 +{extraCount} more
                                             </Text>
-                                        </View>
+                                        </Pressable>
                                     )}
                                 </View>
                             </View>

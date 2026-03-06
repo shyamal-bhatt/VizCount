@@ -1,7 +1,7 @@
 import React, { useState, useCallback, useMemo } from 'react';
 import { View, Text, Pressable, Alert, Linking } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { GestureHandlerRootView } from 'react-native-gesture-handler';
+
 import { Camera } from 'react-native-vision-camera';
 import { Canvas, Path, Rect, Skia, FillType } from '@shopify/react-native-skia';
 import FontAwesome from '@expo/vector-icons/FontAwesome';
@@ -197,7 +197,7 @@ export function ScannerFeature() {
     }, [ROI_X, ROI_Y, ROI_WIDTH, ROI_HEIGHT]);
 
     return (
-        <GestureHandlerRootView className="flex-1">
+        <>
             <SafeAreaView className="flex-1 bg-brand-light dark:bg-brand-dark" edges={['bottom', 'left', 'right']}>
                 <StockPulseHeader />
 
@@ -307,6 +307,6 @@ export function ScannerFeature() {
                 <CoolerBottomSheet scannedItems={scannedItems} onDelete={deleteItem} onEditCount={updateItemCount} />
                 <ScanProgressHUD scanStep={scanStep} />
             </SafeAreaView>
-        </GestureHandlerRootView>
+        </>
     );
 }

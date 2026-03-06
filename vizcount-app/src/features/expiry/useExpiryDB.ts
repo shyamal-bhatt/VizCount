@@ -41,7 +41,8 @@ function startOfDay(ts: number): number {
 }
 
 function daysDiff(expiresAt: number, nowStart: number): number {
-    return Math.ceil((startOfDay(expiresAt) - nowStart) / (1000 * 60 * 60 * 24));
+    const itemStart = startOfDay(expiresAt);
+    return Math.round((itemStart - nowStart) / (1000 * 60 * 60 * 24));
 }
 
 function msToDays(ms: number): number {

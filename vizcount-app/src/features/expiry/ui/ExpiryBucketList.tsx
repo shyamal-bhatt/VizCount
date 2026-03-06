@@ -1,6 +1,6 @@
-import React from 'react';
-import { View, Text, Pressable, SectionList } from 'react-native';
-import { MaterialCommunityIcons } from '@expo/vector-icons';
+import React, { useRef, useState } from 'react';
+import { View, Text, Pressable, SectionList, TouchableOpacity } from 'react-native';
+import { MaterialCommunityIcons, Feather } from '@expo/vector-icons';
 import { useColorScheme } from 'nativewind';
 import { ExpiryBuckets, ExpiryItem } from '../useExpiryDB';
 
@@ -9,6 +9,9 @@ import { ExpiryBuckets, ExpiryItem } from '../useExpiryDB';
 interface ExpiryBucketListProps {
     buckets: ExpiryBuckets;
     onSelectItem: (item: ExpiryItem) => void;
+    viewMode?: 'ribbon' | 'calendar';
+    ListHeaderComponent?: React.ReactElement;
+    ListFooterComponent?: React.ReactElement;
 }
 
 interface BucketConfig {
@@ -185,43 +188,70 @@ function ExpiryRow({ item, color, onPress }: { item: ExpiryItem; color: string; 
 
 // --- Main Component ---
 
-export function ExpiryBucketList({ buckets, onSelectItem }: ExpiryBucketListProps) {
+export function ExpiryBucketList({ buckets, onSelectItem, viewMode = 'ribbon', ListHeaderComponent, ListFooterComponent }: ExpiryBucketListProps) {
+    const listRef = useRef<any>(null);
+    const [showScrollTop, setShowScrollTop] = useState(false);
+
     const allEmpty = BUCKET_CONFIG.every((c) => buckets[c.key].length === 0);
 
-    if (allEmpty) {
-        return (
-            <View className="items-center justify-center py-16 px-8">
-                <Text className="text-5xl mb-4">🗓️</Text>
-                <Text className="text-gray-700 dark:text-white text-base font-semibold mb-2 text-center">
-                    No expiries tracked
-                </Text>
-                <Text className="text-gray-400 dark:text-brand-muted text-sm text-center">
-                    Scan cooler items or add floor entries with best-before dates to see them here.
-                </Text>
-            </View>
-        );
-    }
+    const sections = React.useMemo(() => {
+        if (viewMode !== 'ribbon') return [];
+        return BUCKET_CONFIG.map(config => ({
+            config,
+            data: buckets[config.key]
+        })).filter(s => s.data.length > 0);
+    }, [buckets, viewMode]);
 
     return (
-        <View className="mb-20">
-            {BUCKET_CONFIG.map((config) => {
-                const items = buckets[config.key];
-                if (items.length === 0) return null;
-
-                return (
-                    <View key={config.key}>
-                        <BucketHeader config={config} count={items.length} />
-                        {items.map((item) => (
-                            <ExpiryRow
-                                key={item.id}
-                                item={item}
-                                color={config.color}
-                                onPress={() => onSelectItem(item)}
-                            />
-                        ))}
-                    </View>
-                );
-            })}
+        <View style={{ flex: 1 }}>
+            <SectionList
+                ref={listRef}
+                onScroll={(e: any) => {
+                    const offsetY = e.nativeEvent.contentOffset.y;
+                    if (offsetY > 100 && !showScrollTop) setShowScrollTop(true);
+                    else if (offsetY <= 100 && showScrollTop) setShowScrollTop(false);
+                }}
+                scrollEventThrottle={16}
+                showsVerticalScrollIndicator={false}
+                contentContainerStyle={{ paddingBottom: 32 }}
+                sections={sections}
+                keyExtractor={item => item.id}
+                ListHeaderComponent={ListHeaderComponent}
+                ListFooterComponent={ListFooterComponent}
+                renderSectionHeader={({ section }) => (
+                    <BucketHeader config={section.config} count={section.data.length} />
+                )}
+                renderItem={({ item, section }) => (
+                    <ExpiryRow item={item} color={section.config.color} onPress={() => onSelectItem(item)} />
+                )}
+                ListEmptyComponent={() => {
+                    if (viewMode !== 'ribbon') return null;
+                    if (!allEmpty) return null;
+                    return (
+                        <View className="items-center justify-center py-16 px-8">
+                            <Text className="text-5xl mb-4">🗓️</Text>
+                            <Text className="text-gray-700 dark:text-white text-base font-semibold mb-2 text-center">
+                                No expiries tracked
+                            </Text>
+                            <Text className="text-gray-400 dark:text-brand-muted text-sm text-center">
+                                Scan cooler items or add floor entries with best-before dates to see them here.
+                            </Text>
+                        </View>
+                    );
+                }}
+            />
+            {/* Scroll to Top FAB */}
+            {showScrollTop && (
+                <TouchableOpacity
+                    className="absolute right-6 bg-[#00C4A7] w-12 h-12 rounded-full items-center justify-center shadow-lg transform translate-y-[-10px]"
+                    style={{ elevation: 5, zIndex: 100, bottom: 20 }}
+                    onPress={() => {
+                        listRef.current?.getScrollResponder()?.scrollTo({ y: 0, animated: true });
+                    }}
+                >
+                    <Feather name="arrow-up" size={24} color="#FFF" />
+                </TouchableOpacity>
+            )}
         </View>
     );
 }

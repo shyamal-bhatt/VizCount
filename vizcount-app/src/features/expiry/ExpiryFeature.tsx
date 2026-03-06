@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { View, Text, ScrollView, Pressable } from 'react-native';
+import { View, Text, Pressable, TextInput } from 'react-native';
 import { MaterialCommunityIcons, Feather } from '@expo/vector-icons';
 import { useColorScheme } from 'nativewind';
 import withObservables from '@nozbe/with-observables';
@@ -31,10 +31,10 @@ interface StatPillProps {
     count: number;
     label: string;
     color: string;
-    emoji: string;
+    iconName: keyof typeof Feather.glyphMap;
 }
 
-function StatPill({ count, label, color, emoji }: StatPillProps) {
+function StatPill({ count, label, color, iconName }: StatPillProps) {
     return (
         <View
             style={{
@@ -47,7 +47,7 @@ function StatPill({ count, label, color, emoji }: StatPillProps) {
                 alignItems: 'center',
             }}
         >
-            <Text style={{ fontSize: 18, marginBottom: 2 }}>{emoji}</Text>
+            <Feather name={iconName} size={18} color={color} style={{ marginBottom: 4 }} />
             <Text style={{ color, fontWeight: '800', fontSize: 18 }}>{count}</Text>
             <Text style={{ color, opacity: 0.7, fontSize: 10, fontWeight: '600', marginTop: 1 }}>{label}</Text>
         </View>
@@ -139,6 +139,10 @@ function ExpiryFeatureBase({ scannedItems, floorItems }: ExpiryFeatureProps) {
     const [selectedItem, setSelectedItem] = useState<ExpiryItem | null>(null);
     const [viewMode, setViewMode] = useState<ViewMode>('ribbon');
 
+    // Search & Filter State
+    const [searchQuery, setSearchQuery] = useState('');
+    const [filterUrgency, setFilterUrgency] = useState<'All' | 'Urgent' | 'Soon' | 'Rotation'>('All');
+
     console.log('[ExpiryFeature] Rendered', {
         scannedItemsCount: scannedItems.length,
         floorItemsCount: floorItems.length,
@@ -152,135 +156,140 @@ function ExpiryFeatureBase({ scannedItems, floorItems }: ExpiryFeatureProps) {
             {/* Top header — handles status-bar safe area */}
             <StockPulseHeader />
 
-            <ScrollView
-                style={{ flex: 1 }}
-                showsVerticalScrollIndicator={false}
-                contentContainerStyle={{ paddingBottom: 32 }}
-            >
-                {/* Section heading */}
-                <View
-                    style={{
-                        flexDirection: 'row',
-                        alignItems: 'center',
-                        justifyContent: 'space-between',
-                        paddingHorizontal: 16,
-                        paddingVertical: 14,
-                        borderBottomWidth: 1,
-                        borderBottomColor: isDark ? '#21262d' : '#E5E7EB',
-                    }}
-                >
-                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-                        <MaterialCommunityIcons name="clock-alert-outline" size={20} color="#00C4A7" />
-                        <Text style={{ color: isDark ? '#FFFFFF' : '#111827', fontWeight: '700', fontSize: 16 }}>
-                            Expiry Tracker
-                        </Text>
-                    </View>
-
-                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-                        {urgentCount > 0 && (
-                            <View
-                                style={{
-                                    flexDirection: 'row',
-                                    alignItems: 'center',
-                                    backgroundColor: '#FF3B3018',
-                                    borderColor: '#FF3B3050',
-                                    borderWidth: 1,
-                                    borderRadius: 99,
-                                    paddingHorizontal: 10,
-                                    paddingVertical: 4,
-                                    gap: 4,
-                                }}
-                            >
-                                <Feather name="alert-triangle" size={11} color="#FF3B30" />
-                                <Text style={{ color: '#FF3B30', fontWeight: '700', fontSize: 12 }}>
-                                    {urgentCount} urgent
-                                </Text>
-                            </View>
-                        )}
-                        {rotationAlerts.length > 0 && (
-                            <View
-                                style={{
-                                    backgroundColor: '#F59E0B18',
-                                    borderColor: '#F59E0B50',
-                                    borderWidth: 1,
-                                    borderRadius: 99,
-                                    paddingHorizontal: 10,
-                                    paddingVertical: 4,
-                                }}
-                            >
-                                <Text style={{ color: '#F59E0B', fontWeight: '700', fontSize: 12 }}>
-                                    ↺ {rotationAlerts.length}
-                                </Text>
-                            </View>
-                        )}
-                    </View>
-                </View>
-
-                {/* Summary stat pills */}
-                <View style={{ flexDirection: 'row', paddingHorizontal: 16, paddingTop: 12, paddingBottom: 4, gap: 8 }}>
-                    <StatPill
-                        count={buckets.expired.length + buckets.today.length}
-                        label="Urgent"
-                        color="#FF3B30"
-                        emoji="🚨"
-                    />
-                    <StatPill
-                        count={buckets.threeDays.length + buckets.sevenDays.length}
-                        label="Soon"
-                        color="#FFBF00"
-                        emoji="⚠️"
-                    />
-                    <StatPill
-                        count={totalCount}
-                        label="Total"
-                        color="#00C4A7"
-                        emoji="📦"
-                    />
-                    {rotationAlerts.length > 0 && (
-                        <StatPill
-                            count={rotationAlerts.length}
-                            label="Rotation"
-                            color="#F59E0B"
-                            emoji="↺"
-                        />
-                    )}
-                </View>
-
-                {/* ── Rotation Alert Banner (only shown when violations exist) ── */}
-                <RotationAlertBanner alerts={rotationAlerts} />
-
-                {/* ── View Toggle ── */}
-                <ViewToggle current={viewMode} onChange={setViewMode} isDark={isDark} />
-
-                {/* ── Views ── */}
-                {viewMode === 'ribbon' && (
+            <ExpiryBucketList
+                buckets={buckets}
+                onSelectItem={setSelectedItem}
+                viewMode={viewMode}
+                ListHeaderComponent={
                     <>
-                        <ExpiryRibbon items={items} onSelectItem={setSelectedItem} />
+                        {/* Section heading */}
                         <View
                             style={{
                                 flexDirection: 'row',
                                 alignItems: 'center',
+                                justifyContent: 'space-between',
                                 paddingHorizontal: 16,
-                                marginTop: 16,
-                                marginBottom: 4,
-                                gap: 8,
+                                paddingVertical: 14,
+                                borderBottomWidth: 1,
+                                borderBottomColor: isDark ? '#21262d' : '#E5E7EB',
                             }}
                         >
-                            <View style={{ flex: 1, height: 1, backgroundColor: isDark ? '#21262d' : '#E5E7EB' }} />
-                            <Text style={{ color: isDark ? '#8B949E' : '#9CA3AF', fontSize: 10, fontWeight: '700', textTransform: 'uppercase', letterSpacing: 1 }}>
-                                By Urgency
-                            </Text>
-                            <View style={{ flex: 1, height: 1, backgroundColor: isDark ? '#21262d' : '#E5E7EB' }} />
+                            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                                <MaterialCommunityIcons name="clock-alert-outline" size={20} color="#00C4A7" />
+                                <Text style={{ color: isDark ? '#FFFFFF' : '#111827', fontWeight: '700', fontSize: 16 }}>
+                                    Expiry Tracker
+                                </Text>
+                            </View>
+
+                            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, flex: 1, justifyContent: 'flex-end' }}>
+                                {/* Search Input */}
+                                <View style={{
+                                    flexDirection: 'row', alignItems: 'center',
+                                    backgroundColor: isDark ? '#1D2125' : '#F3F4F6',
+                                    borderRadius: 8, paddingHorizontal: 8, height: 32, flex: 1, maxWidth: 150,
+                                    borderWidth: 1, borderColor: isDark ? '#30363D' : '#E5E7EB'
+                                }}>
+                                    <Feather name="search" size={14} color={isDark ? "#8B949E" : "#9CA3AF"} />
+                                    <TextInput
+                                        style={{ flex: 1, color: isDark ? '#FFFFFF' : '#111827', fontSize: 12, marginLeft: 6, padding: 0 }}
+                                        placeholder="Search..."
+                                        placeholderTextColor={isDark ? "#4B5563" : "#9CA3AF"}
+                                        value={searchQuery}
+                                        onChangeText={setSearchQuery}
+                                        selectionColor="#00C4A7"
+                                    />
+                                    {searchQuery.length > 0 && (
+                                        <Pressable onPress={() => setSearchQuery('')}>
+                                            <Feather name="x-circle" size={14} color={isDark ? "#8B949E" : "#9CA3AF"} />
+                                        </Pressable>
+                                    )}
+                                </View>
+
+                                {/* Filter Toggle */}
+                                <Pressable
+                                    onPress={() => {
+                                        const modes: ('All' | 'Urgent' | 'Soon' | 'Rotation')[] = ['All', 'Urgent', 'Soon', 'Rotation'];
+                                        setFilterUrgency(modes[(modes.indexOf(filterUrgency) + 1) % modes.length]);
+                                    }}
+                                    style={{
+                                        flexDirection: 'row', alignItems: 'center', gap: 4,
+                                        backgroundColor: filterUrgency !== 'All' ? '#00C4A715' : (isDark ? '#1D2125' : '#F3F4F6'),
+                                        borderRadius: 8, paddingHorizontal: 8, height: 32,
+                                        borderWidth: 1, borderColor: filterUrgency !== 'All' ? '#00C4A750' : (isDark ? '#30363D' : '#E5E7EB')
+                                    }}
+                                >
+                                    <Feather name="filter" size={14} color={filterUrgency !== 'All' ? '#00C4A7' : (isDark ? '#8B949E' : '#6B7280')} />
+                                    <Text style={{ fontSize: 12, fontWeight: '600', color: filterUrgency !== 'All' ? '#00C4A7' : (isDark ? '#8B949E' : '#6B7280') }}>
+                                        {filterUrgency}
+                                    </Text>
+                                </Pressable>
+                            </View>
                         </View>
-                        <ExpiryBucketList buckets={buckets} onSelectItem={setSelectedItem} />
+
+                        {/* Summary stat pills */}
+                        <View style={{ flexDirection: 'row', paddingHorizontal: 16, paddingTop: 12, paddingBottom: 4, gap: 8 }}>
+                            <StatPill
+                                count={buckets.expired.length + buckets.today.length}
+                                label="Urgent"
+                                color="#FF3B30"
+                                iconName="alert-triangle"
+                            />
+                            <StatPill
+                                count={buckets.threeDays.length + buckets.sevenDays.length}
+                                label="Soon"
+                                color="#FFBF00"
+                                iconName="clock"
+                            />
+                            <StatPill
+                                count={totalCount}
+                                label="Total"
+                                color="#00C4A7"
+                                iconName="package"
+                            />
+                            {rotationAlerts.length > 0 && (
+                                <StatPill
+                                    count={rotationAlerts.length}
+                                    label="Rotation"
+                                    color="#F59E0B"
+                                    iconName="refresh-cw"
+                                />
+                            )}
+                        </View>
+
+                        {/* ── Rotation Alert Banner (only shown when violations exist) ── */}
+                        <RotationAlertBanner alerts={rotationAlerts} />
+
+                        {/* ── View Toggle ── */}
+                        <ViewToggle current={viewMode} onChange={setViewMode} isDark={isDark} />
+
+                        {/* ── Views ── */}
+                        {viewMode === 'ribbon' && (
+                            <>
+                                <ExpiryRibbon items={items} onSelectItem={setSelectedItem} />
+                                <View
+                                    style={{
+                                        flexDirection: 'row',
+                                        alignItems: 'center',
+                                        paddingHorizontal: 16,
+                                        marginTop: 16,
+                                        marginBottom: 4,
+                                        gap: 8,
+                                    }}
+                                >
+                                    <View style={{ flex: 1, height: 1, backgroundColor: isDark ? '#21262d' : '#E5E7EB' }} />
+                                    <Text style={{ color: isDark ? '#8B949E' : '#9CA3AF', fontSize: 10, fontWeight: '700', textTransform: 'uppercase', letterSpacing: 1 }}>
+                                        By Urgency
+                                    </Text>
+                                    <View style={{ flex: 1, height: 1, backgroundColor: isDark ? '#21262d' : '#E5E7EB' }} />
+                                </View>
+                            </>
+                        )}
                     </>
-                )}
-
-                {viewMode === 'calendar' && (
-                    <ExpiryCalendarView items={items} onSelectItem={setSelectedItem} />
-                )}
-
-            </ScrollView>
+                }
+                ListFooterComponent={
+                    viewMode === 'calendar' ? <ExpiryCalendarView items={items} onSelectItem={setSelectedItem} /> : undefined
+                }
+            />
 
             {/* ── Detail Sheet ── */}
             <ExpiryDetailSheet item={selectedItem} onClose={() => setSelectedItem(null)} />
