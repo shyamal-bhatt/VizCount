@@ -77,4 +77,4 @@ def render_inventory_table(df: pd.DataFrame) -> None:
         .format({"Cooler": "{:d}", "Floor": "{:d}"})
     )
 
-    st.dataframe(styled, width='stretch', hide_index=True)
+    st.dataframe(styled, use_container_width=True)

@@ -4,7 +4,7 @@ import { field, text, readonly, date } from '@nozbe/watermelondb/decorators'
 export class SalesFloor extends Model {
     static table = 'sales_floor'
 
-    @field('pid') pid!: number
+    @text('pid') pid!: string
     @text('name') name!: string
     @field('count') count!: number | null
     @field('weight') weight!: number | null

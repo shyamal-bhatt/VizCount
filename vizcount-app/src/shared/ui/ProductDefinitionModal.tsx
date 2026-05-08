@@ -52,9 +52,12 @@ export function ProductDefinitionModal({ visible, onClose }: ProductDefinitionMo
             const collection = database.collections.get<DefinedProduct>('defined_products');
             const allProducts = await collection.query().fetch();
             // Sort by created_at descending (newest first)
-            setProducts(allProducts.sort((a, b) => b.createdAt - a.createdAt));
+            const sorted = allProducts.sort((a, b) => b.createdAt - a.createdAt);
+            console.log(`[DefinedProducts] 📋 fetchProducts loaded ${sorted.length} product(s):`);
+            sorted.forEach(p => console.log(`  → id:${p.id} | pid:${p.pid} (type:${typeof p.pid}) | name:"${p.name}" | type:${p.type} | pack:${p.pack}`));
+            setProducts(sorted);
         } catch (error) {
-            console.error("Failed to fetch defined products:", error);
+            console.error("[DefinedProducts] ❌ Failed to fetch defined products:", error);
         }
     };
 
@@ -77,7 +80,11 @@ export function ProductDefinitionModal({ visible, onClose }: ProductDefinitionMo
         const pidNum = parseInt(pid, 10);
         const packNum = parseInt(pack, 10);
 
+        console.log(`[DefinedProducts] 💾 handleSave → raw pid input: "${pid}" → parsed pidNum: ${pidNum} (type:${typeof pidNum})`);
+        console.log(`[DefinedProducts] 💾 handleSave → name:"${name}" pack:${packNum} type:${selectedType} editing:${editingProduct ? editingProduct.id : 'NEW'}`);
+
         if (isNaN(pidNum) || isNaN(packNum)) {
+            console.warn(`[DefinedProducts] ⚠️ Validation failed — pidNum:${pidNum} packNum:${packNum}`);
             Alert.alert("Validation Error", "PID and Pack must be numbers");
             return;
         }
@@ -86,19 +93,23 @@ export function ProductDefinitionModal({ visible, onClose }: ProductDefinitionMo
             await database.write(async () => {
                 const collection = database.collections.get<DefinedProduct>('defined_products');
                 if (editingProduct) {
+                    console.log(`[DefinedProducts] ✏️ Updating existing product id:${editingProduct.id} with pid:${pidNum}`);
                     await editingProduct.update(p => {
                         p.name = name;
-                        p.pid = pidNum;
+                        p.pid = pidNum.toString();
                         p.pack = packNum;
                         p.type = selectedType;
                     });
+                    console.log(`[DefinedProducts] ✅ Update committed for id:${editingProduct.id}`);
                 } else {
-                    await collection.create(p => {
+                    console.log(`[DefinedProducts] ➕ Creating new product with pid:${pidNum}`);
+                    const created = await collection.create(p => {
                         p.name = name;
-                        p.pid = pidNum;
+                        p.pid = pidNum.toString();
                         p.pack = packNum;
                         p.type = selectedType;
                     });
+                    console.log(`[DefinedProducts] ✅ Created new product → id:${created.id} | pid:${created.pid} (type:${typeof created.pid}) | name:"${created.name}"`);
                 }
             });
 
@@ -109,7 +120,7 @@ export function ProductDefinitionModal({ visible, onClose }: ProductDefinitionMo
             setSelectedType(PRODUCT_TYPES[0]);
             setEditingProduct(null);
         } catch (error) {
-            console.error("Failed to save defined product:", error);
+            console.error("[DefinedProducts] ❌ Failed to save defined product:", error);
             Alert.alert("Error", "Failed to save product.");
         }
     };

@@ -58,6 +58,32 @@ def inject_css() -> None:
   @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
   html, body, [class*="css"] { font-family: 'Inter', sans-serif; }
 
+  /* OVERRIDE SNOWFLAKE DARK MODE INJECTION */
+  :root {
+    --primary-color: #3b82f6 !important;
+    --background-color: #f8f9fb !important;
+    --secondary-background-color: #ffffff !important;
+    --text-color: #0f172a !important;
+  }
+  .stApp, [data-testid="stAppViewContainer"] {
+    background-color: #f8f9fb !important;
+    color: #0f172a !important;
+  }
+  [data-testid="stAppViewBlockContainer"] {
+    color: #0f172a !important;
+  }
+  [data-testid="stAppViewBlockContainer"] .stMarkdown, 
+  [data-testid="stAppViewBlockContainer"] .stText, 
+  [data-testid="stAppViewBlockContainer"] p, 
+  [data-testid="stAppViewBlockContainer"] h1, 
+  [data-testid="stAppViewBlockContainer"] h2, 
+  [data-testid="stAppViewBlockContainer"] h3, 
+  [data-testid="stAppViewBlockContainer"] h4, 
+  [data-testid="stAppViewBlockContainer"] h5, 
+  [data-testid="stAppViewBlockContainer"] h6 {
+    color: #0f172a !important;
+  }
+
   /* Sidebar background & text */
   [data-testid="stSidebar"] { background-color: #0f1117; border-right: 1px solid #1e2130; }
   [data-testid="stSidebar"] * { color: #e2e8f0 !important; }
@@ -123,57 +149,20 @@ def inject_css() -> None:
 def force_sidebar_open() -> None:
     """
     Inject JavaScript (zero-height iframe) to permanently force the sidebar open.
-
-    Why JS and not CSS:
-      Streamlit sets `transform: translateX(-300px)` as an *inline style* on
-      the <section> element. CSS `!important` cannot override inline styles.
-      Only JavaScript can directly mutate element.style.transform.
-
-    What this does:
-      1. Clears any localStorage keys that store the collapsed state, so
-         a page reload won't restore it.
-      2. Sets sidebar.style.transform = 'translateX(0px)' immediately.
-      3. Installs a MutationObserver on the parent document to re-apply the
-         fix whenever Streamlit tries to re-collapse the sidebar.
     """
     components.html(
         """
         <script>
         (function keepSidebarOpen() {
             var parent = window.parent;
-
-            // 1. Clear localStorage sidebar state so it doesn't restore on reload
             try {
-                Object.keys(parent.localStorage).forEach(function(k) {
-                    if (k.toLowerCase().indexOf("sidebar") !== -1) {
-                        parent.localStorage.removeItem(k);
-                    }
-                });
-            } catch (e) {}
-
-            // 2. Force the sidebar translateX to 0
-            function forceOpen() {
-                try {
-                    var sb = parent.document.querySelector(
-                        'section[data-testid="stSidebar"]'
-                    );
-                    if (sb) {
-                        sb.style.transform  = "translateX(0px)";
-                        sb.style.visibility = "visible";
-                    }
-                } catch (e) {}
-            }
-
-            forceOpen();
-
-            // 3. Re-apply if Streamlit ever mutates the style attribute
-            try {
-                var observer = new parent.MutationObserver(forceOpen);
-                observer.observe(parent.document.body, {
-                    attributes: true,
-                    subtree: true,
-                    attributeFilter: ["style"]
-                });
+                var sb = parent.document.querySelector(
+                    'section[data-testid="stSidebar"]'
+                );
+                if (sb) {
+                    sb.style.transform  = "translateX(0px)";
+                    sb.style.visibility = "visible";
+                }
             } catch (e) {}
         })();
         </script>

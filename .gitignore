@@ -87,6 +87,12 @@ env.bak/
 venv.bak/
 
 # Streamlit config
-.streamlit/secrets.toml
+**/.streamlit/secrets.toml
+
+# vizcount-app specific
+tmp/
+*.apk
+google-services.json
+GoogleService-Info.plist
 
 data.json

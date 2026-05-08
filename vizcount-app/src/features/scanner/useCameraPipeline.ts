@@ -1,36 +1,31 @@
-import { useState, useCallback, useMemo } from 'react';
+import { useState, useCallback, useMemo, useRef, useEffect } from 'react';
 import { Dimensions } from 'react-native';
-import { useCameraDevice, useCameraPermission, useFrameProcessor, useCodeScanner } from 'react-native-vision-camera';
-import { useTextRecognition } from 'react-native-vision-camera-ocr-plus';
-import { useResizePlugin } from 'vision-camera-resize-plugin';
+import { useCameraDevice, useCameraPermission, useCodeScanner } from 'react-native-vision-camera';
+import { PhotoRecognizer } from 'react-native-vision-camera-ocr-plus';
 import { useSharedValue } from 'react-native-reanimated';
 import { Worklets } from 'react-native-worklets-core';
-import { OpenCV, ObjectType, DataTypes, ColorConversionCodes, BorderTypes } from 'react-native-fast-opencv';
 import { GS1Parser, GS1ParseResult } from '@/src/shared/lib/gs1Parser';
+import * as FileSystem from 'expo-file-system/legacy';
+import { Logger } from '@/utils/logger';
 
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
 
 interface UseCameraPipelineProps {
     scanMode: 'barcode' | 'text';
-    onRequestTextMode: (gtin: number) => void;
+    onRequestTextMode: (gtin: string, reason: 'unlinked' | 'missing_expiry') => void;
     onPidFoundNatively: () => void;
     onHandoffToJS: (data: { pid: string; nativeSN: string | null; validLines: string[], gs1Data?: GS1ParseResult }) => void;
-    gtinMap?: Map<number, any>;
+    onDuplicateFoundNatively: (sn: string) => void;
+    gtinMap?: Map<string, any>;
+    checkGlobalDuplicateSN: (sn: string) => Promise<boolean>;
 }
 
-export function useCameraPipeline({ scanMode, onRequestTextMode, onPidFoundNatively, onHandoffToJS, gtinMap }: UseCameraPipelineProps) {
+export function useCameraPipeline({ scanMode, onRequestTextMode, onPidFoundNatively, onHandoffToJS, onDuplicateFoundNatively, gtinMap, checkGlobalDuplicateSN }: UseCameraPipelineProps) {
     const [isCameraActive, setIsCameraActive] = useState(false);
     const device = useCameraDevice('back');
     const { hasPermission, requestPermission } = useCameraPermission();
 
-    const { scanText } = useTextRecognition({ useLightweightMode: true });
-    const { resize } = useResizePlugin();
-
     // ─── React state managed from the JS thread ────────────────────────────────
-    // These replace Reanimated shared values that were causing the crash.
-    // Reanimated's scheduler (scheduleOnRNImpl) does NOT exist inside VisionCamera's
-    // react-native-worklets runtime — so NO Reanimated reactive APIs (useDerivedValue,
-    // useAnimatedReaction) can be triggered from inside useFrameProcessor.
     const [warningText, setWarningText] = useState('');
     const [isLocked, setIsLocked] = useState(false);
 
@@ -55,309 +50,223 @@ export function useCameraPipeline({ scanMode, onRequestTextMode, onPidFoundNativ
     // ─── Worklet shared values (writable from within the frame processor) ──────
     const latestBarcodeSN = useSharedValue<string | null>(null);
     const lockScanning = useSharedValue(false);
-    const pidBuffer = useSharedValue<string[]>([]);
-    const textBuffer = useSharedValue<string[]>([]); // Buffer for last 5 frames of text
-    const lastOCRTime = useSharedValue<number>(0);
-    const lastSavedPID = useSharedValue<string>('');
     const lastScannedGS1 = useSharedValue<string>('');
-    const frameWidth = useSharedValue(1080);
-    const frameHeight = useSharedValue(1920);
+
+    // ─── Dedup guard: prevent re-processing the same barcode that is still in
+    //     the camera's field of view after we finished handling it (e.g. after
+    //     the duplicate-SN toast timeout unlocks scanning). The value is only
+    //     cleared when a *different* barcode enters the frame.
+    const lastProcessedBarcode = useRef<string | null>(null);
+
+    // ─── Always-current ref for gtinMap so handleBarcodeOnJS never has a stale ──
+    // closure. useCodeScanner freezes its onCodeScanned on the native side, so  ──
+    // we can't rely on React re-renders to update the callback.                 ──
+    const gtinMapRef = useRef(gtinMap);
+    useEffect(() => {
+        gtinMapRef.current = gtinMap;
+        console.log(`[CameraPipeline] 🔄 gtinMapRef updated — ${gtinMap?.size ?? 0} GTINs tracked: [${Array.from(gtinMap?.keys() ?? []).join(', ')}]`);
+    }, [gtinMap]);
 
     // ─────────────────────────────────────────────────────────────────────────
-    // Worklets.createRunOnJS — the only safe way to call JS from VisionCamera's
-    // worklet runtime. Do NOT use runOnJS from react-native-reanimated here.
+    // Worklets.createRunOnJS — safe JS thread callbacks
     // ─────────────────────────────────────────────────────────────────────────
-    const _setWarning = useCallback((msg: string) => {
-        setWarningText(msg);
-    }, []);
-
-    const _setLocked = useCallback((locked: boolean) => {
-        setIsLocked(locked);
-    }, []);
-
     const _notifyPidFound = useCallback(() => {
-        console.log(`[OCR] 🟡 PID stabilising — notifying UI`);
         setIsLocked(true);
         onPidFoundNatively();
     }, [onPidFoundNatively]);
 
-    const _log = useCallback((msg: string) => {
-        console.log(msg);
-    }, []);
-
-    const _handleOCRHandoff = useCallback((pid: string, nativeSN: string | null, validLines: string[], gs1Json: string) => {
-        let gs1Data: GS1ParseResult | undefined;
-        if (gs1Json) {
-            try { gs1Data = JSON.parse(gs1Json); } catch (_) { }
-        }
-        console.log(`\n[OCR] 🔒 PID stabilised → ${pid}`);
-        console.log(`[OCR] Valid lines (${validLines.length}):`, validLines);
-        console.log(`[OCR] GS1 data: ${gs1Data ? JSON.stringify(gs1Data) : 'none'}`);
-        onHandoffToJS({ pid, nativeSN, validLines, gs1Data });
-    }, [onHandoffToJS]);
-
-    // Stable JS-thread callbacks safe to call from the VisionCamera worklet
-    const jsSetWarning = useMemo(() => Worklets.createRunOnJS(_setWarning), [_setWarning]);
-    const jsSetLocked = useMemo(() => Worklets.createRunOnJS(_setLocked), [_setLocked]);
     const jsNotifyPidFound = useMemo(() => Worklets.createRunOnJS(_notifyPidFound), [_notifyPidFound]);
-    const jsHandleOCRHandoff = useMemo(() => Worklets.createRunOnJS(_handleOCRHandoff), [_handleOCRHandoff]);
-    const jsLog = useMemo(() => Worklets.createRunOnJS(_log), [_log]);
 
     // ─── GS1 Barcode handler — runs on JS thread via onCodeScanned ───────────
-    const handleBarcodeOnJS = useCallback((value: string) => {
+    // NOTE: gtinMap is intentionally read from gtinMapRef.current (not the closure)
+    // so this callback stays stable and useCodeScanner's native-frozen onCodeScanned
+    // always sees the latest GTIN mapping without needing to be re-registered.
+    const handleBarcodeOnJS = useCallback(async (value: string) => {
+        // ── Dedup: skip if this is the exact same barcode string that is still
+        //    sitting in the camera view from the last scan we already handled.
+        if (value === lastProcessedBarcode.current) {
+            console.log(`[BARCODE] ⏩ Skipping — same barcode still in view: ${value.substring(0, 30)}…`);
+            return;
+        }
+
+        // Lock immediately since this is now an async evaluation
+        lockScanning.value = true;
+        lastProcessedBarcode.current = value;
+
         console.log(`\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`);
         console.log(`[BARCODE] Raw scanned value: ${value}`);
-        console.log(`[BARCODE] Parsing as GS1-128...`);
 
         const gs1 = GS1Parser.parse(value);
-        console.log(`[BARCODE] GS1 → GTIN: ${gs1.gtin ?? 'none'} | SN: ${gs1.sn ?? 'none'} | Weight: ${gs1.weight ?? 'none'}kg | Expiry: ${gs1.expiryDate ? new Date(gs1.expiryDate).toDateString() : 'none'} | Production: ${gs1.productionDate ? new Date(gs1.productionDate).toDateString() : 'none'}`);
+        console.log(`[BARCODE] GS1 → GTIN: ${gs1.gtin ?? 'none'} | Expiry: ${gs1.expiryDate ? new Date(gs1.expiryDate).toDateString() : 'none'}`);
 
-        // Always store for downstream use
         latestBarcodeSN.value = value;
         lastScannedGS1.value = JSON.stringify(gs1);
 
         if (!gs1.gtin) {
             console.log(`[BARCODE] No GTIN found — will use OCR to confirm PID`);
+            lockScanning.value = false;
             return;
         }
 
-        const knownProduct = gtinMap?.get(gs1.gtin);
-        if (knownProduct) {
+        // ⭐ PREEMPTIVE DUPLICATE CHECK ⭐
+        if (gs1.sn) {
+            const isDup = await checkGlobalDuplicateSN(gs1.sn);
+            if (isDup) {
+                console.log(`[BARCODE] ⚠️ Preemptive duplicate SN block: ${gs1.sn}`);
+                onDuplicateFoundNatively(gs1.sn);
+                return; // Keep locked
+            }
+        }
+
+        // Always read from ref so we get the latest map even if this callback
+        // was frozen by useCodeScanner on its first render.
+        const currentGtinMap = gtinMapRef.current;
+        console.log(`[BARCODE] 🗺️ gtinMapRef has ${currentGtinMap?.size ?? 0} entries at scan time`);
+        const knownProduct = currentGtinMap?.get(gs1.gtin!);
+        console.log(`[BARCODE] GTIN ${gs1.gtin} lookup → ${knownProduct ? `✅ ${knownProduct.name}` : '❌ not found'}`);
+
+        // If the product has a known shelf life stored in the DB, we can compute
+        // bestBefore = productionDate + shelfLifeDays without OCR.
+        // This covers: Maple Leaf (pre-seeded 11d) and any previously-learned product.
+        const hasKnownShelfLife = (knownProduct?.shelfLifeDays ?? 0) > 0;
+        const isChickenProduct = knownProduct && (
+            knownProduct.name.toLowerCase().includes('prime') ||
+            knownProduct.name.toLowerCase().includes('chicken') ||
+            knownProduct.type.toLowerCase().includes('chicken') ||
+            knownProduct.type.toLowerCase().includes('halal')
+        );
+        // Requires OCR snap only when: known product + no barcode expiry + chicken type + no shelf life on record
+        const productRequiresOCRForExpiry = knownProduct && !gs1.expiryDate && isChickenProduct && !hasKnownShelfLife;
+
+        if (knownProduct && !productRequiresOCRForExpiry) {
             console.log(`[BARCODE] ✅ GTIN ${gs1.gtin} matched → FAST-TRACK for ${knownProduct.name} (PID: ${knownProduct.pid})`);
-            lockScanning.value = true;
             _notifyPidFound();
             onHandoffToJS({ pid: knownProduct.pid.toString(), nativeSN: value, validLines: [], gs1Data: gs1 });
         } else {
-            console.log(`[BARCODE] GTIN ${gs1.gtin} not in catalog — Requesting Text Mode for PID`);
-            if (onRequestTextMode) onRequestTextMode(gs1.gtin);
+            if (onRequestTextMode) {
+                const reason = !knownProduct ? 'unlinked' : 'missing_expiry';
+                onRequestTextMode(gs1.gtin, reason);
+            }
         }
-    }, [gtinMap, _notifyPidFound, onHandoffToJS, onRequestTextMode]);
+    }, [_notifyPidFound, onHandoffToJS, onRequestTextMode, onDuplicateFoundNatively, checkGlobalDuplicateSN]);
 
     // ─── Code Scanner (Barcode) — runs on JS thread already ──────────────────
     const codeScanner = useCodeScanner({
-        // Widen types enough for retail/GS1, but EXCLUDE 2D matrices (aztec, pdf-417, data-matrix)
-        // because searching for 2D matrices on every frame destroys MLKit FPS and causes extreme lag.
         codeTypes: ['code-128', 'ean-13', 'upc-a'],
         onCodeScanned: (codes) => {
-            console.log(`[BARCODE-RAW] onCodeScanned fired with ${codes.length} codes`);
-            if (lockScanning.value) return;
-            if (codes.length > 0) {
-                const value = codes[0].value;
-                if (value && value.length >= 20) {
-                    handleBarcodeOnJS(value);
-                } else if (value) {
-                    console.log(`[BARCODE] Skipped short value (${value.length} chars): "${value}"`);
-                }
-            } else {
-                console.log(`[BARCODE-RAW] Codes array was empty`);
+            if (lockScanning.value || scanMode !== 'barcode') return;
+            if (codes.length > 0 && codes[0].value && codes[0].value.length >= 20) {
+                handleBarcodeOnJS(codes[0].value);
             }
         }
     });
 
-    // ─── Frame Processor — runs in VisionCamera worklet runtime ──────────────
-    // CRITICAL RULES:
-    //   ✓ Read/write useSharedValue from react-native-reanimated (safe)
-    //   ✓ Call Worklets.createRunOnJS wrappers (safe cross-thread call)
-    //   ✗ Do NOT call runOnJS from react-native-reanimated  (crashes)
-    //   ✗ Do NOT use useDerivedValue / useAnimatedReaction   (crashes)
-    //   ✗ Do NOT call GS1Parser, JSON.parse, console.log    (plain JS, unsafe)
-    const frameProcessor = useFrameProcessor((frame) => {
-        'worklet';
-        // Immediately exit if we are in barcode mode to free up 100% of the thread
-        if (scanMode !== 'text') return;
+    // NOTE: No frameProcessor needed. The no-op stub was creating a second
+    // ImageAnalysis surface, pushing CameraX above its 3-use-case limit
+    // (Preview + CodeScanner + ImageCapture + FrameProcessor = 4 → crash).
+    // codeScanner already handles barcode detection; text mode uses photo capture.
 
-        frameWidth.value = frame.width;
-        frameHeight.value = frame.height;
+    // ─── Static Image OCR Processor (Tap-to-Snap) ────────────────────────────
+    const processStaticImageOCR = useCallback(async (imagePath: string) => {
+        try {
+            console.log(`[STATIC-OCR] 📸 Processing high-res static image at: ${imagePath}`);
+            const uri = `file://${imagePath}`;
 
-        const now = Date.now();
-        if (now - lastOCRTime.value < 500) return;
-        lastOCRTime.value = now;
+            const data = await PhotoRecognizer({ uri });
 
-        if (lockScanning.value) return;
+            if (!data || !data.blocks || data.blocks.length === 0) {
+                console.log(`[STATIC-OCR] ❌ No text located in photo.`);
+                setWarningText('No text found in photo. Please try again.');
+                return false;
+            }
 
-        // ── Camera scale + ROI offset (responsive to actual container size) ──
-        const containerW = cw.value;
-        const containerH = ch.value;
+            const validLines: string[] = [];
 
-        const roiW = containerW * 0.90;
-        const roiH = 260;
-        const roiX = (containerW - roiW) / 2;
-        const roiY = (containerH - roiH) / 2;
+            // Simple exact matching for the static pass
+            const PID_EXPLICIT_RE = /\bPID[:\s]+(\d{7,8})\b/i;
+            const PID_BARE_RE = /(?:^|\s)(\d{7,8})(?:\s|$)/;
+            let foundPID: string | null = null;
 
-        const scaleW = containerW / frameWidth.value;
-        const scaleH = containerH / frameHeight.value;
-        const scale = scaleW > scaleH ? scaleW : scaleH;
-        const renderedW = frameWidth.value * scale;
-        const renderedH = frameHeight.value * scale;
-        const offsetX = (containerW - renderedW) / 2;
-        const offsetY = (containerH - renderedH) / 2;
+            for (let b = 0; b < data.blocks.length; b++) {
+                const block = data.blocks[b];
+                const lines = (block as any).lines as any[];
 
-        // ── Image quality check ────────────────────────────────────────────────
-        const targetHeight = frame.height / 4;
-        const targetWidth = frame.width / 4;
+                for (let l = 0; l < lines.length; l++) {
+                    const lineVal = lines[l].lineText;
+                    validLines.push(lineVal);
 
-        const resizedBuffer = resize(frame, { scale: { width: targetWidth, height: targetHeight }, pixelFormat: 'bgr', dataType: 'uint8' });
-        const bgrMat = OpenCV.frameBufferToMat(targetHeight, targetWidth, 3, resizedBuffer);
-        const grayMat = OpenCV.createObject(ObjectType.Mat, targetHeight, targetWidth, DataTypes.CV_8U);
-        OpenCV.invoke('cvtColor', bgrMat, grayMat, ColorConversionCodes.COLOR_BGR2GRAY);
-        const laplacianMat = OpenCV.createObject(ObjectType.Mat, targetHeight, targetWidth, DataTypes.CV_64F);
-        OpenCV.invoke('Laplacian', grayMat, laplacianMat, DataTypes.CV_64F, 1, 1, 0, BorderTypes.BORDER_DEFAULT);
-        const mean = OpenCV.createObject(ObjectType.Mat, 1, 1, DataTypes.CV_64F);
-        const stddev = OpenCV.createObject(ObjectType.Mat, 1, 1, DataTypes.CV_64F);
+                    // Check for PID
+                    const explicitMatch = lineVal.match(PID_EXPLICIT_RE);
+                    if (explicitMatch) {
+                        foundPID = explicitMatch[1].trim();
+                        break;
+                    }
 
-        OpenCV.invoke('meanStdDev', laplacianMat, mean, stddev);
-        const blurVariance = OpenCV.matToBuffer(stddev, 'float64').buffer[0] * OpenCV.matToBuffer(stddev, 'float64').buffer[0];
-        OpenCV.invoke('meanStdDev', grayMat, mean, stddev);
-        const brightnessVal = OpenCV.matToBuffer(mean, 'float64').buffer[0];
-        OpenCV.clearBuffers();
-
-        if (blurVariance === 0) return;
-        if (blurVariance < 20) { jsSetWarning('Image is blurry. Please hold steady.'); return; }
-        if (brightnessVal > 220) { jsSetWarning('Too much reflection/glare. Tilt camera.'); return; }
-        if (brightnessVal < 40) { jsSetWarning('Too dark. Move to better lighting.'); return; }
-        jsSetWarning('');
-
-        // ── Text (OCR) pass ────────────────────────────────────────────────────
-        const data = scanText(frame);
-        if (!data || !data.blocks || data.blocks.length === 0) {
-            jsLog(`[OCR] No text blocks detected in frame`);
-            return;
-        }
-
-        const validLines: string[] = [];
-        for (let b = 0; b < data.blocks.length; b++) {
-            const block = data.blocks[b];
-            const lines = (block as any).lines as any[];
-
-            // Map the block's bounding box from Camera Coords -> Screen Coords
-            const processElement = (frame: any, text: string, confidence: number | undefined) => {
-                if (confidence !== undefined && confidence < 0.65) {
-                    jsLog(`[OCR] Rejected low confidence line: "${text}" (${confidence})`);
-                    return;
+                    const strippedSpaces = lineVal.replace(/\s+/g, '');
+                    const bareMatch = lineVal.match(PID_BARE_RE) ?? strippedSpaces.match(/^\d{7,8}$/);
+                    if (bareMatch && !lineVal.includes('-') && !lineVal.includes('/')) {
+                        const matchedPid = bareMatch[1] ?? strippedSpaces;
+                        if (matchedPid.length >= 7 && matchedPid.length <= 8) foundPID = matchedPid;
+                    }
                 }
-
-                // Camera frame is rotated 90deg on phones, so X/Y are swapped in the sensor vs the screen
-                const sensorX = frame.boundingCenterX;
-                const sensorY = frame.boundingCenterY;
-                const sensorW = frame.width;
-                const sensorH = frame.height;
-
-                // Using 'cover' resize mode:
-                const screenCX = (sensorX * scale) + offsetX;
-                const screenCY = (sensorY * scale) + offsetY;
-                const screenW = sensorW * scale;
-                const screenH = sensorH * scale;
-
-                const lineLeft = screenCX - (screenW / 2);
-                const lineRight = screenCX + (screenW / 2);
-                const lineTop = screenCY - (screenH / 2);
-                const lineBottom = screenCY + (screenH / 2);
-
-                const roiBottom = roiY + roiH;
-                const roiRight = roiX + roiW;
-
-                // Bounding Box Overlap Test (instead of strict center point check)
-                const overlaps =
-                    lineTop < roiBottom &&
-                    lineBottom > roiY &&
-                    lineLeft < roiRight &&
-                    lineRight > roiX;
-
-                if (overlaps) {
-                    validLines.push(text);
-                } else {
-                    jsLog(`[OCR] Rejected line outside ROI: "${text}" (Top: ${Math.round(lineTop)}, Bottom: ${Math.round(lineBottom)} | ROI: ${Math.round(roiY)} to ${Math.round(roiBottom)})`);
-                }
-            };
-
-            if (!lines || lines.length === 0) {
-                processElement(block.blockFrame, block.blockText, undefined);
-                continue;
+                if (foundPID) break;
             }
 
-            for (let l = 0; l < lines.length; l++) {
-                const line = lines[l];
-                processElement(line.lineFrame, line.lineText, line.confidence);
+            if (!foundPID) {
+                console.log(`[STATIC-OCR] ❌ Failed to find 7-8 digit PID in captured image.`);
+                setWarningText('Could not find PID. Make sure it is clear and focused.');
+                return false;
+            }
+
+            // Normalize PID (e.g. remove any accidentally extracted leading 0s mathematically)
+            foundPID = parseInt(foundPID, 10).toString();
+
+            let gs1Data: GS1ParseResult | undefined;
+            if (lastScannedGS1.value) {
+                try { gs1Data = JSON.parse(lastScannedGS1.value); } catch (_) { }
+            }
+
+            setIsLocked(true);
+            console.log(`[STATIC-OCR] 🎯 Extracted PID: ${foundPID}`);
+
+            onHandoffToJS({
+                pid: foundPID,
+                nativeSN: latestBarcodeSN.value,
+                validLines: validLines,
+                gs1Data: gs1Data
+            });
+
+            return true;
+        } catch (e) {
+            Logger.error('CameraPipeline', 'Static OCR Error', e);
+            setWarningText('Error processing image. Please try again.');
+            return false;
+        } finally {
+            // CRITICAL: Clean up the file so we do not bloat storage natively on the phone!
+            try {
+                // Using the specific imported legacy method to avoid the warning thrown by the proxy
+                await FileSystem.deleteAsync(imagePath, { idempotent: true });
+                console.log(`[STATIC-OCR] 🗑️ Cleaned up image file from cache.`);
+            } catch (err) {
+                Logger.error('CameraPipeline', 'Failed to delete temp image', err);
             }
         }
+    }, [containerLayout, lastScannedGS1, latestBarcodeSN, onHandoffToJS]);
 
-        if (validLines.length === 0) {
-            jsLog(`[OCR] Blocks detected, but 0 lines inside ROI / high confidence`);
-            return;
-        }
-
-        // Maintain a rolling buffer of all valid text across the last 5 frames
-        let newTextBuf = [...textBuffer.value, ...validLines];
-        if (newTextBuf.length > 50) { // arbitrary cap to prevent huge memory leak, keeps ~5 frames of data
-            newTextBuf = newTextBuf.slice(newTextBuf.length - 50);
-        }
-        textBuffer.value = newTextBuf;
-
-        jsLog(`[OCR] Valid lines in ROI (This frame): ${JSON.stringify(validLines)}`);
-
-        // PIDs are always exactly 8 digits.
-        const PID_EXPLICIT_RE = /\bPID[:\s]+(\d{8})\b/i;
-        const PID_BARE_RE = /^\s*(\d{8})\s*$/;
-        let newPidBuf = [...pidBuffer.value];
-
-        for (let i = 0; i < validLines.length; i++) {
-            const line = validLines[i];
-            const numbersOnly = line.replace(/[^0-9\s]/g, '').trim();
-            if (!numbersOnly) continue;
-
-            const pidM = line.match(PID_EXPLICIT_RE) ?? numbersOnly.match(PID_BARE_RE);
-            if (pidM) {
-                const matchedPid = pidM[1].trim();
-                jsLog(`[OCR] 🎯 Matched PID regex: "${matchedPid}" from line "${line}"`);
-                if (newPidBuf.length >= 5) newPidBuf.shift();
-                newPidBuf.push(matchedPid);
-            }
-        }
-
-        if (newPidBuf.length !== pidBuffer.value.length) {
-            jsLog(`[OCR] PID Buffer updated: ${JSON.stringify(newPidBuf)}`);
-            pidBuffer.value = newPidBuf;
-        }
-
-        // ── Stabilise PID (needs 3 matching reads) ─────────────────────────────
-        const stabilize = (buf: string[]): string | null => {
-            'worklet';
-            if (buf.length < 3) return null;
-            const counts: { [k: string]: number } = {};
-            for (let i = 0; i < buf.length; i++) {
-                const v = buf[i];
-                counts[v] = (counts[v] || 0) + 1;
-                if (counts[v] >= 3) return v;
-            }
-            return null;
-        };
-
-        const stablePID = stabilize(newPidBuf);
-        if (stablePID) jsNotifyPidFound();
-        if (!stablePID) return;
-        if (stablePID === lastSavedPID.value) return;
-
-        lockScanning.value = true;
-        lastSavedPID.value = stablePID;
-        jsSetLocked(true);
-
-        // Pass the entire flattened text buffer to JS for extraction (prevents SN starvation)
-        const combinedText = Array.from(new Set(newTextBuf));
-        jsHandleOCRHandoff(stablePID, latestBarcodeSN.value, combinedText, lastScannedGS1.value);
-    }, [scanText, jsSetWarning, jsSetLocked, jsNotifyPidFound, jsHandleOCRHandoff, jsLog]);
 
     const resumeScanning = () => {
         lockScanning.value = false;
-        pidBuffer.value = [];
-        textBuffer.value = [];
+        latestBarcodeSN.value = null;   // clear stale SN so it never leaks into the next scan
         lastScannedGS1.value = '';
-        lastSavedPID.value = '';
+        // NOTE: lastProcessedBarcode is intentionally NOT cleared here.
+        // It is only reset when the camera actually sees a *different* barcode value,
+        // preventing the infinite duplicate-toast loop that occurs when resumeScanning
+        // unlocks the pipeline while the same barcode is still in the camera's FOV.
         setIsLocked(false);
         setWarningText('');
         console.log(`[SCANNER] 🔄 Scanner resumed — ready for next scan`);
     };
 
-    // roiBorderColor as a plain JS value (driven by isLocked React state)
     const roiBorderColor = isLocked ? 'rgba(0, 255, 0, 0.8)' : 'rgba(255, 255, 255, 0.5)';
 
     return {
@@ -366,13 +275,12 @@ export function useCameraPipeline({ scanMode, onRequestTextMode, onPidFoundNativ
         requestPermission,
         isCameraActive,
         setIsCameraActive,
-        frameProcessor,
-        // In Vision Camera v4, assigning undefined to codeScanner doesn't always cleanly detach it.
-        // We ensure it is only passed when specifically in barcode mode.
+        frameProcessor: undefined,
         codeScanner: scanMode === 'barcode' ? codeScanner : undefined,
         warningText,
         roiBorderColor,
         resumeScanning,
+        processStaticImageOCR,
         onCameraLayout,
         ROI_X,
         ROI_Y,

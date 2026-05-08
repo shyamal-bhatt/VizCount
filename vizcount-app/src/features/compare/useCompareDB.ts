@@ -3,7 +3,6 @@ import { database } from '@/db';
 import { ScannedItem } from '@/db/models/ScannedItem';
 import { SalesFloor } from '@/db/models/SalesFloor';
 import { Product } from '@/src/shared/ui/ProductPickerModal';
-import { wipeAndGenerateDummyData } from '@/db/dummyData';
 
 export function useCompareDB(scannedItems: ScannedItem[], floorItems: SalesFloor[], selectedProduct: Product | 'All' | null) {
     // ── Filter by selected product PID ──
@@ -28,48 +27,35 @@ export function useCompareDB(scannedItems: ScannedItem[], floorItems: SalesFloor
     const totalCount = coolerCount + floorCount;
 
     // ── Chart: product breakdown across cooler and floor ──
-    const chartDataMap: Record<number, { product: string; pid: number; cooler: number; floor: number }> = useMemo(() => {
-        const map: Record<number, { product: string; pid: number; cooler: number; floor: number }> = {};
+    const chartDataMap: Record<number, { product: string; pid: number; cooler: number; floor: number; coolerWeight: number; floorWeight: number }> = useMemo(() => {
+        const map: Record<number, { product: string; pid: number; cooler: number; floor: number; coolerWeight: number; floorWeight: number }> = {};
 
         filteredCooler.forEach(item => {
-            const pid = item.pid;
+            const pid = parseInt(item.pid, 10);
             if (!map[pid]) {
-                map[pid] = { product: item.name || 'Unknown', pid, cooler: 0, floor: 0 };
+                map[pid] = { product: item.name || 'Unknown', pid, cooler: 0, floor: 0, coolerWeight: 0, floorWeight: 0 };
             }
             map[pid].cooler += (item.count ?? 1);
+            if (item.netKg) {
+                map[pid].coolerWeight += item.netKg;
+            }
         });
 
         filteredFloor.forEach(item => {
-            const pid = item.pid;
+            const pid = parseInt(item.pid, 10);
             if (!map[pid]) {
-                map[pid] = { product: item.name || 'Unknown', pid, cooler: 0, floor: 0 };
+                map[pid] = { product: item.name || 'Unknown', pid, cooler: 0, floor: 0, coolerWeight: 0, floorWeight: 0 };
             }
             map[pid].floor += (item.weight ? 1 : (item.count ?? 0));
+            if (item.weight) {
+                map[pid].floorWeight += item.weight;
+            }
         });
 
         return map;
     }, [filteredCooler, filteredFloor]);
 
-    const chartData = useMemo(() => Object.values(chartDataMap).sort((a, b) => b.cooler - a.cooler), [chartDataMap]);
-
-    // ── Dev tools ────────────────────────
-    const seedMockData = async () => {
-        await wipeAndGenerateDummyData(200);
-    };
-
-    const clearMockData = async () => {
-        const items = database.collections.get<ScannedItem>('scanned_items');
-        const floorItemsCollection = database.collections.get<SalesFloor>('sales_floor');
-        await database.write(async () => {
-            const allItems = await items.query().fetch();
-            const allFloorItems = await floorItemsCollection.query().fetch();
-            const deleteOps = [
-                ...allItems.map(i => i.prepareDestroyPermanently()),
-                ...allFloorItems.map(i => i.prepareDestroyPermanently())
-            ];
-            await database.batch(...deleteOps);
-        });
-    };
+    const chartData = useMemo(() => Object.values(chartDataMap).sort((a, b) => (b.cooler + b.floor) - (a.cooler + a.floor)), [chartDataMap]);
 
     return {
         filteredCooler,
@@ -79,7 +65,5 @@ export function useCompareDB(scannedItems: ScannedItem[], floorItems: SalesFloor
         totalCount,
         chartDataMap,
         chartData,
-        seedMockData,
-        clearMockData,
     };
 }

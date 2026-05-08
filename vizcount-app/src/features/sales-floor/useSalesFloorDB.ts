@@ -37,25 +37,30 @@ export function useSalesFloorDB() {
             const floorCollection = database.collections.get('sales_floor');
 
             if (data.type === 'count') {
-                if (!data.count || data.count <= 0) throw new Error("Invalid count");
+                let parsedExpiry = null;
+                if (data.expiryDate) {
+                    const [year, month, day] = data.expiryDate.split('-').map(Number);
+                    parsedExpiry = new Date(year, month - 1, day).getTime();
+                }
                 await floorCollection.create((entry: any) => {
                     entry.pid = data.product.pid;
                     entry.name = data.product.name;
                     entry.count = data.count;
                     entry.weight = null;
-                    entry.expiryDate = data.expiryDate ? new Date(data.expiryDate).getTime() : null;
+                    entry.expiryDate = parsedExpiry;
                 });
             } else if (data.type === 'weight') {
                 if (!data.stagedWeights || data.stagedWeights.length === 0) return;
-                const batchWrites = data.stagedWeights.map(staged =>
-                    floorCollection.prepareCreate((entry: any) => {
+                const batchWrites = data.stagedWeights.map(staged => {
+                    const [year, month, day] = staged.date.split('-').map(Number);
+                    return floorCollection.prepareCreate((entry: any) => {
                         entry.pid = data.product.pid;
                         entry.name = data.product.name;
                         entry.count = 1;
                         entry.weight = parseFloat(staged.weight);
-                        entry.expiryDate = new Date(staged.date).getTime();
-                    })
-                );
+                        entry.expiryDate = new Date(year, month - 1, day).getTime();
+                    });
+                });
                 await database.batch(...batchWrites);
             }
         });
@@ -76,7 +81,12 @@ export function useSalesFloorDB() {
             await item.update(record => {
                 if (data.weight !== undefined) record.weight = data.weight;
                 if (data.count !== undefined) record.count = data.count;
-                record.expiryDate = data.expiryDate ? new Date(data.expiryDate).getTime() : null;
+                if (data.expiryDate) {
+                    const [year, month, day] = data.expiryDate.split('-').map(Number);
+                    record.expiryDate = new Date(year, month - 1, day).getTime();
+                } else {
+                    record.expiryDate = null;
+                }
             });
         });
     };

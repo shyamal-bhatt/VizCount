@@ -5,4 +5,20 @@ streamlit:
   stage: streamlit_stage
   query_warehouse: COMPUTE_WH
   main_file: app.py
+  env_file: environment.yml
   title: "VizCount Dashboard"
+  additional_source_files:
+    - config/__init__.py
+    - config/settings.py
+    - data/__init__.py
+    - data/loader.py
+    - utils/__init__.py
+    - utils/icons.py
+    - utils/logger.py
+    - components/__init__.py
+    - components/alerts.py
+    - components/charts.py
+    - components/inventory_table.py
+    - components/metrics.py
+    - components/sidebar.py
+    - .streamlit/config.toml

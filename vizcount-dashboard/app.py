@@ -10,11 +10,13 @@ Wires together:
   - Styling  → utils/icons.py + .streamlit/config.toml
 """
 
+import sys
 import streamlit as st
 
 from config.settings import PAGE_CONFIG
 from data.loader import load_category_data
 from utils.icons import inject_css, force_sidebar_open, ICON_HEADER
+from utils.logger import get_logger
 from components.sidebar import render_sidebar
 from components.metrics import render_kpi_row
 from components.alerts import render_alerts
@@ -22,10 +24,18 @@ from components.charts import render_charts_row
 from components.inventory_table import render_inventory_table
 from utils.icons import ICON_HEADER
 
+log = get_logger("app")
+
 # ── Bootstrap ─────────────────────────────────────────────────────────────────
 st.set_page_config(**PAGE_CONFIG)
 inject_css()
 force_sidebar_open()    # JS override: keeps sidebar translateX at 0 on every run
+
+log.info(
+    "VizCount app boot | Python %s | Streamlit %s",
+    sys.version.split()[0],
+    st.__version__,
+)
 
 # ── Sidebar / navigation ───────────────────────────────────────────────────────
 selected_category = render_sidebar()

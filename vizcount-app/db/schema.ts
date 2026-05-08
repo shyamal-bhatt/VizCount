@@ -1,13 +1,13 @@
 import { appSchema, tableSchema } from '@nozbe/watermelondb'
 
 export default appSchema({
-    version: 5,
+    version: 7,
     tables: [
         tableSchema({
             name: 'scanned_items',
             columns: [
-                { name: 'pid', type: 'number', isIndexed: true },
-                { name: 'sn', type: 'number', isIndexed: true },
+                { name: 'pid', type: 'string', isIndexed: true },
+                { name: 'sn', type: 'string', isIndexed: true },
                 { name: 'name', type: 'string' },
                 { name: 'best_before_date', type: 'number', isOptional: true },
                 { name: 'net_kg', type: 'number', isOptional: true },
@@ -19,7 +19,7 @@ export default appSchema({
         tableSchema({
             name: 'sales_floor',
             columns: [
-                { name: 'pid', type: 'number', isIndexed: true },
+                { name: 'pid', type: 'string', isIndexed: true },
                 { name: 'name', type: 'string' },
                 { name: 'count', type: 'number', isOptional: true },
                 { name: 'weight', type: 'number', isOptional: true },
@@ -32,10 +32,11 @@ export default appSchema({
             name: 'defined_products',
             columns: [
                 { name: 'name', type: 'string' },
-                { name: 'pid', type: 'number', isIndexed: true },
-                { name: 'gtin', type: 'number', isIndexed: true, isOptional: true },
+                { name: 'pid', type: 'string', isIndexed: true },
+                { name: 'gtin', type: 'string', isIndexed: true, isOptional: true },
                 { name: 'pack', type: 'number' },
                 { name: 'type', type: 'string' },
+                { name: 'shelf_life_days', type: 'number', isOptional: true },
                 { name: 'created_at', type: 'number' },
                 { name: 'updated_at', type: 'number' },
             ]

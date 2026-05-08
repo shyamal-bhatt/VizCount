@@ -12,28 +12,49 @@ PAGE_CONFIG = dict(
 )
 
 # ── Product catalogue ─────────────────────────────────────────────────────────
+# Keys must exactly match the `type` column in Snowflake's defined_products table.
 PRODUCTS: dict[str, list[str]] = {
     "Beef": [
-        "Ribeye Steak", "Ground Beef 80/20", "Chuck Roast",
-        "Sirloin Tip", "Beef Tenderloin", "Short Rib",
-        "T-Bone Steak", "Beef Brisket",
+        "AA STRIPLOIN STEAK", "AA TRI TIP", "AA BLADE STEAK",
+        "BF TRI TIP SIRLOIN", "BFSTK SRLN TIP C11YF", "BFSTK INSD RND C05YF",
+        "BFRST INSD BLD C09YF", "BFSTK INS ROUND HL", "BFRST SRLN TIP C10YF",
+        "BFGRD XLEAN C14YF", "BFGRD MEDIUM C14YF", "BFGRD MEDIUM 454YF",
+        "BFGRD LEAN 454YF", "BFGRD LEAN C14YF", "BF MEATBALL",
+        "BFGRD XLEAN 454YF", "BFGRD REGULAR TB1YF", "BFGRD LEAN TB1YF",
     ],
     "Pork": [
-        "Pork Shoulder", "Pork Belly", "Baby Back Ribs",
-        "Pork Tenderloin", "Ham Hock", "Pork Chops",
+        "PKSSG BR MAPLE 900ML", "PKSSG BR MAPLE 375JV", "PKSSG BR ORIG 375JV",
+        "PKSSG BR RND 250JV", "PKSSG BR ORIG 900ML", "PKSSG BR ORIG 375ML",
+        "PKSSG BR MAPLE 375ML", "JVL BWN SUG HON", "PKSSG DN MLDIT 500JV",
+        "PKSSG DN HOTIT 500JV", "PKSSG DN BRAT 500JV", "PKSSG GR MLDIT 454JV",
+        "PKRIB BACK C10ML", "PKRIB SIDE C18ML", "PKRIB SWEETNSR C18ML",
+        "PORK SIDE RIBS", "PKGRD LEAN 454ML", "PKGRD LEAN 454MR",
+        "PKGRD LEAN 1.36ML", "PK MEATBALL 375YF", "PK BELLY BL C09MR",
+        "PKRIB SWEETNSR C18MR", "PKCHP FST FRY COBMR", "PKCHP CTR RIB C14ML",
+        "PKCHP BL CC RB C08ML", "PKCHP COMBO C15ML", "PKCHP BL CC RB C08MR",
+        "PKCHP CTRB BI C08ML", "PKCHP CTRB BI C08MR", "PK HALF LOIN",
+        "PK TNDRLN C12FL", "PKRST BLD BL C13ML",
     ],
-    "Chicken": [
-        "Whole Chicken", "Chicken Breast", "Chicken Thighs",
-        "Chicken Wings", "Chicken Drumsticks", "Ground Chicken",
+    "Organic Chicken": [
+        "PRIME ORG WB", "PRIME ORG SPLT WNG", "PRIME RWA THIN SLICD",
+        "PRIME RWA BSB", "PRIME RWA BSB VP", "PRIME ORG BSB",
+        "PR RWA DICED CHK", "PRIME RWA BST",
     ],
-    "Seafood": [
-        "Atlantic Salmon", "Shrimp (16/20)", "Tilapia Fillet",
-        "Cod Fillet", "Sea Bass", "Scallops",
+    "Maple Leaf Chicken": [
+        "ML WHOLE WING", "ML CKN BSB VP", "ML CKN BRST BNLSKNLS",
+        "ML CHKN DRUMS VP", "ML CHKN THIGHS VP",
     ],
     "Halal": [
-        "MINA Halal Chicken Leg", "MINA Halal Whole Chicken", "MINA Halal Drumstick",
-        "MINA Halal Ground Chicken", "MINA Halal Breast (Bone-in)", "MINA Halal BSB VP",
-        "MINA Halal Chicken Breast", "MINA Halal Thigh",
+        "MINA HALAL CHN LG QT", "MINA HALAL CHN WHOLE", "MINA HALAL CHKN DRUM",
+        "MINA HALAL CHN GRNDS", "MINA HALAL CHN BSB", "MINA HALAL BSB VP",
+        "MINA HALAL CHN BST", "MINA HALAL CHN THIGH", "GOAT CUBES BONE IN",
+    ],
+    "Seafood": [
+        "COHO 2PC PORTIONS", "YFM BASA FILLET", "AQMR SURIMI FLAKE1KG",
+        "AQMR SURIMI FLAKE340", "AQMR SURIMI STICK340", "YFM SLMN ATL PTN 2PC",
+        "YFM SWT SMKY COHO", "YFM ATL SLMN W/BUTR", "YFM LMN HRB COHO",
+        "YFM SLMN COHO FILLET", "YFM RAINBW TROUT FLT", "YFM TILAPIA FILLET",
+        "YFM SLMN ATLANTIC PTN",
     ],
 }
 

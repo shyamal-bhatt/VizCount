@@ -35,17 +35,19 @@ def render_charts_row(df: pd.DataFrame) -> None:
         fig.add_trace(go.Bar(
             name="In Cooler",
             x=df["product"], y=df["cooler_count"],
+            orientation='v', text=df["cooler_count"], textposition='auto',
             marker_color="#3b82f6", marker_line_width=0,
             hovertemplate="<b>%{x}</b><br>Cooler: %{y}<extra></extra>",
         ))
         fig.add_trace(go.Bar(
             name="On Floor",
             x=df["product"], y=df["floor_count"],
-            marker_color="#22c55e", marker_line_width=0,
+            orientation='v', text=df["floor_count"], textposition='auto',
+            marker_color="#10b981", marker_line_width=0,
             hovertemplate="<b>%{x}</b><br>Floor: %{y}<extra></extra>",
         ))
         fig.update_layout(**CHART_LAYOUT, barmode="group", xaxis_tickangle=-35)
-        st.plotly_chart(fig, width='stretch', config={"displayModeBar": False})
+        st.plotly_chart(fig, use_container_width=True, config={"displayModeBar": False})
 
     # ── Expiry Timeline ───────────────────────────────────────────────────────
     with col_right:
@@ -66,9 +68,10 @@ def render_charts_row(df: pd.DataFrame) -> None:
         fig2 = go.Figure(go.Bar(
             x=bucket_df["bucket"],
             y=bucket_df["count"],
+            orientation='v', text=bucket_df["count"], textposition='auto',
             marker_color=bucket_df["color"],
             marker_line_width=0,
             hovertemplate="<b>%{x}</b><br>Items: %{y}<extra></extra>",
         ))
         fig2.update_layout(**CHART_LAYOUT, showlegend=False)
-        st.plotly_chart(fig2, width='stretch', config={"displayModeBar": False})
+        st.plotly_chart(fig2, use_container_width=True, config={"displayModeBar": False})

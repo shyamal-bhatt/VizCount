@@ -25,10 +25,9 @@ export function RotationAlertBanner({ alerts }: RotationAlertBannerProps) {
     const { colorScheme } = useColorScheme();
     const isDark = colorScheme === 'dark';
     const [expanded, setExpanded] = useState(false);
+    const [resolvedAlerts, setResolvedAlerts] = useState<Set<string>>(new Set());
 
     if (alerts.length === 0) return null;
-
-    const [resolvedAlerts, setResolvedAlerts] = useState<Set<string>>(new Set());
 
     const activeAlerts = alerts.filter(a => !resolvedAlerts.has(a.pid.toString()));
 

@@ -4,7 +4,7 @@ import { Feather } from '@expo/vector-icons';
 import { useColorScheme } from 'nativewind';
 
 export interface Product {
-    pid: number;
+    pid: string;
     name: string;
     type: string;
 }
@@ -33,7 +33,7 @@ export function ProductPickerModal({
         if (!q) return products;
         return products.filter(p =>
             p.name.toLowerCase().includes(q) ||
-            p.pid.toString().includes(q)
+            p.pid.includes(q)
         );
     }, [products, searchQuery]);
 

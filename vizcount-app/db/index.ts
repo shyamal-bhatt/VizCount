@@ -1,5 +1,6 @@
 import { Database } from '@nozbe/watermelondb'
 import SQLiteAdapter from '@nozbe/watermelondb/adapters/sqlite'
+import { schemaMigrations, addColumns } from '@nozbe/watermelondb/Schema/migrations'
 import * as FileSystem from 'expo-file-system'
 import { Platform } from 'react-native'
 
@@ -19,8 +20,29 @@ console.log(`   Path: ${dbPath}`);
 console.log(`   Document Dir: ${docDir}`);
 console.log('====================================================');
 
+// ─── Schema Migrations ────────────────────────────────────────────────────────
+// Each step describes what changed between consecutive schema versions.
+// WatermelonDB applies only the steps the device hasn't run yet.
+const migrations = schemaMigrations({
+    migrations: [
+        {
+            // v6 → v7: Add shelf_life_days to defined_products
+            toVersion: 7,
+            steps: [
+                addColumns({
+                    table: 'defined_products',
+                    columns: [
+                        { name: 'shelf_life_days', type: 'number', isOptional: true },
+                    ],
+                }),
+            ],
+        },
+    ],
+});
+
 const adapter = new SQLiteAdapter({
     schema,
+    migrations,
     dbName: 'scanned_items', // Explicitly name it to make it traceable
     jsi: true, /* Enable JSI for faster SQLite operations natively */
     onSetUpError: error => {

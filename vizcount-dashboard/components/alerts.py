@@ -18,34 +18,34 @@ def render_alerts(df: pd.DataFrame) -> None:
         return
 
     with st.expander("Expiry Alerts — action required", expanded=True):
-        a1, a2, a3 = st.columns(3)
+        active_alerts = []
+        if not expired.empty: active_alerts.append(("expired", expired))
+        if not today.empty: active_alerts.append(("today", today))
+        if not tomorrow.empty: active_alerts.append(("tomorrow", tomorrow))
 
-        with a1:
-            if not expired.empty:
-                names = ", ".join(expired["product"].tolist())
-                st.markdown(
-                    f'<div class="alert-expired">'
-                    f'<div class="alert-text">Already Expired &nbsp;({expired.shape[0]})</div>'
-                    f'<div class="alert-sub">{names}</div></div>',
-                    unsafe_allow_html=True,
-                )
-
-        with a2:
-            if not today.empty:
-                names = ", ".join(today["product"].tolist())
-                st.markdown(
-                    f'<div class="alert-today">'
-                    f'<div class="alert-text">Expiring Today &nbsp;({today.shape[0]})</div>'
-                    f'<div class="alert-sub">{names}</div></div>',
-                    unsafe_allow_html=True,
-                )
-
-        with a3:
-            if not tomorrow.empty:
-                names = ", ".join(tomorrow["product"].tolist())
-                st.markdown(
-                    f'<div class="alert-soon">'
-                    f'<div class="alert-text">Expiring Tomorrow &nbsp;({tomorrow.shape[0]})</div>'
-                    f'<div class="alert-sub">{names}</div></div>',
-                    unsafe_allow_html=True,
-                )
+        cols = st.columns(len(active_alerts))
+        
+        for i, (a_type, df_alert) in enumerate(active_alerts):
+            with cols[i]:
+                names = ", ".join(df_alert["product"].tolist())
+                if a_type == "expired":
+                    st.markdown(
+                        f'<div class="alert-expired">'
+                        f'<div class="alert-text">Already Expired &nbsp;({df_alert.shape[0]})</div>'
+                        f'<div class="alert-sub">{names}</div></div>',
+                        unsafe_allow_html=True,
+                    )
+                elif a_type == "today":
+                    st.markdown(
+                        f'<div class="alert-today">'
+                        f'<div class="alert-text">Expiring Today &nbsp;({df_alert.shape[0]})</div>'
+                        f'<div class="alert-sub">{names}</div></div>',
+                        unsafe_allow_html=True,
+                    )
+                elif a_type == "tomorrow":
+                    st.markdown(
+                        f'<div class="alert-soon">'
+                        f'<div class="alert-text">Expiring Tomorrow &nbsp;({df_alert.shape[0]})</div>'
+                        f'<div class="alert-sub">{names}</div></div>',
+                        unsafe_allow_html=True,
+                    )

@@ -3,10 +3,12 @@ import { View, Text, TouchableOpacity, Pressable } from 'react-native';
 import { MaterialCommunityIcons, Feather } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useColorScheme } from 'nativewind';
+import { useRouter } from 'expo-router';
 import { ProductDefinitionModal } from './ProductDefinitionModal';
 
 export function StockPulseHeader() {
     const insets = useSafeAreaInsets();
+    const router = useRouter();
     const { colorScheme, toggleColorScheme } = useColorScheme();
     const isDark = colorScheme === 'dark';
 
@@ -33,7 +35,7 @@ export function StockPulseHeader() {
                 {/* Settings Button */}
                 <TouchableOpacity
                     className="w-10 h-10 rounded-xl bg-gray-100 dark:bg-[#1D2125] border border-gray-200 dark:border-[#30363D] items-center justify-center"
-                    onPress={() => { /* TODO: Open Settings */ }}
+                    onPress={() => router.push('/settings' as any)}
                 >
                     <Feather name="settings" size={18} color={isDark ? "#E1E3E6" : "#4B5563"} />
                 </TouchableOpacity>

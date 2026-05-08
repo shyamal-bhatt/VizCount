@@ -15,9 +15,18 @@ const TYPE_MAP: Record<string, string> = {
 const normalizeType = (type: string): string =>
     TYPE_MAP[type.toLowerCase()] ?? type
 
-const SEED_PRODUCTS = [
+type SeedProduct = {
+    name: string;
+    pid: number;
+    pack: number;
+    type: string;
+    /** Pre-known shelf life in days. Only set for products with a fixed shelf life (e.g. Maple Leaf = 11d). */
+    shelfLifeDays?: number;
+};
+
+const SEED_PRODUCTS: SeedProduct[] = [
     { name: 'PRIME ORG WB', pid: 31396056, pack: 6, type: 'Organic Chicken' },
-    { name: 'ML WHOLE WING', pid: 31180986, pack: 8, type: 'Maple Leaf Chicken' },
+    { name: 'ML WHOLE WING', pid: 31180986, pack: 8, type: 'Maple Leaf Chicken', shelfLifeDays: 11 },
     { name: 'PRIME ORG SPLT WNG', pid: 30031863, pack: 8, type: 'Organic Chicken' },
     { name: 'MINA HALAL CHN LG QT', pid: 30148922, pack: 6, type: 'Halal' },
     { name: 'MINA HALAL CHN WHOLE', pid: 30148926, pack: 6, type: 'Halal' },
@@ -76,32 +85,32 @@ const SEED_PRODUCTS = [
     { name: 'PRIME ORG BSB', pid: 31396049, pack: 8, type: 'Organic Chicken' },
     { name: 'PR RWA DICED CHK', pid: 50714850, pack: 8, type: 'Organic Chicken' },
     { name: 'PRIME RWA BST', pid: 30489356, pack: 12, type: 'Organic Chicken' },
-    { name: 'ML CKN BSB VP', pid: 30798737, pack: 6, type: 'Maple Leaf Chicken' },
-    { name: 'ML CKN BRST BNLSKNLS', pid: 9314778, pack: 8, type: 'Maple Leaf Chicken' },
-    { name: 'ML CHKN DRUMS VP', pid: 30096145, pack: 6, type: 'Maple Leaf Chicken' },
-    { name: 'ML CHKN THIGHS VP', pid: 30096200, pack: 6, type: 'Maple Leaf Chicken' },
-    { name: 'BFRST SRLN TIP C10YF', pid: 30512743, pack: 8, type: 'Beef'},
-    { name: 'BFGRD XLEAN C14YF', pid: 30910241, pack: 8, type: 'Beef'},
-    { name: 'BFGRD MEDIUM C14YF', pid: 30054234, pack: 8, type: 'Beef'},
-    { name: 'BFGRD MEDIUM 454YF', pid: 30231907, pack: 12, type: 'Beef'},
-    { name: 'BFGRD LEAN 454YF', pid: 30231908, pack: 12, type: 'Beef'},
-    { name: 'BFGRD LEAN C14YF', pid: 30053516, pack: 8, type: 'Beef'},
-    { name: 'BF MEATBALL', pid: 30831503, pack: 6, type: 'Beef'},
-    { name: 'BFGRD XLEAN 454YF', pid: 30232055, pack: 12, type: 'Beef'},
-    { name: 'BFGRD REGULAR TB1YF', pid: 31637355, pack: 30, type: 'Beef'},
-    { name: 'BFGRD LEAN TB1YF', pid: 31637357, pack: 30, type: 'Beef'},
-    { name: 'BFGRD LEAN TB1YF', pid: 30700923, pack: 30, type: 'Beef'},
-    { name: 'AQMR SURIMI FLAKE1KG', pid: 30423042, pack: 10, type: 'Seafood'},
-    { name: 'AQMR SURIMI FLAKE340', pid: 30953524, pack: 12, type: 'Seafood'},
-    { name: 'AQMR SURIMI STICK340', pid: 30953525, pack: 12, type: 'Seafood'},
-    { name: 'YFM SLMN ATL PTN 2PC', pid: 30133763, pack: 6, type: 'Seafood'},
-    { name: 'YFM SWT SMKY COHO', pid: 50712337, pack: 6, type: 'Seafood'},
-    { name: 'YFM ATL SLMN W/BUTR', pid: 50712345, pack: 6, type: 'Seafood'},
-    { name: 'YFM LMN HRB COHO', pid: 50712348, pack: 6, type: 'Seafood'},
-    { name: 'YFM SLMN COHO FILLET', pid: 31237716, pack: 6, type: 'Seafood'},
-    { name: 'YFM RAINBW TROUT FLT', pid: 31237972, pack: 6, type: 'Seafood'},
-    { name: 'YFM TILAPIA FILLET', pid: 31237984, pack: 6, type: 'Seafood'},
-    { name: 'YFM SLMN ATLANTIC PTN', pid: 31236718, pack: 6, type: 'Seafood'},
+    { name: 'ML CKN BSB VP', pid: 30798737, pack: 6, type: 'Maple Leaf Chicken', shelfLifeDays: 11 },
+    { name: 'ML CKN BRST BNLSKNLS', pid: 9314778, pack: 8, type: 'Maple Leaf Chicken', shelfLifeDays: 11 },
+    { name: 'ML CHKN DRUMS VP', pid: 30096145, pack: 6, type: 'Maple Leaf Chicken', shelfLifeDays: 11 },
+    { name: 'ML CHKN THIGHS VP', pid: 30096200, pack: 6, type: 'Maple Leaf Chicken', shelfLifeDays: 11 },
+    { name: 'BFRST SRLN TIP C10YF', pid: 30512743, pack: 8, type: 'Beef' },
+    { name: 'BFGRD XLEAN C14YF', pid: 30910241, pack: 8, type: 'Beef' },
+    { name: 'BFGRD MEDIUM C14YF', pid: 30054234, pack: 8, type: 'Beef' },
+    { name: 'BFGRD MEDIUM 454YF', pid: 30231907, pack: 12, type: 'Beef' },
+    { name: 'BFGRD LEAN 454YF', pid: 30231908, pack: 12, type: 'Beef' },
+    { name: 'BFGRD LEAN C14YF', pid: 30053516, pack: 8, type: 'Beef' },
+    { name: 'BF MEATBALL', pid: 30831503, pack: 6, type: 'Beef' },
+    { name: 'BFGRD XLEAN 454YF', pid: 30232055, pack: 12, type: 'Beef' },
+    { name: 'BFGRD REGULAR TB1YF', pid: 31637355, pack: 30, type: 'Beef' },
+    { name: 'BFGRD LEAN TB1YF', pid: 31637357, pack: 30, type: 'Beef' },
+    { name: 'BFGRD LEAN TB1YF', pid: 30700923, pack: 30, type: 'Beef' },
+    { name: 'AQMR SURIMI FLAKE1KG', pid: 30423042, pack: 10, type: 'Seafood' },
+    { name: 'AQMR SURIMI FLAKE340', pid: 30953524, pack: 12, type: 'Seafood' },
+    { name: 'AQMR SURIMI STICK340', pid: 30953525, pack: 12, type: 'Seafood' },
+    { name: 'YFM SLMN ATL PTN 2PC', pid: 30133763, pack: 6, type: 'Seafood' },
+    { name: 'YFM SWT SMKY COHO', pid: 50712337, pack: 6, type: 'Seafood' },
+    { name: 'YFM ATL SLMN W/BUTR', pid: 50712345, pack: 6, type: 'Seafood' },
+    { name: 'YFM LMN HRB COHO', pid: 50712348, pack: 6, type: 'Seafood' },
+    { name: 'YFM SLMN COHO FILLET', pid: 31237716, pack: 6, type: 'Seafood' },
+    { name: 'YFM RAINBW TROUT FLT', pid: 31237972, pack: 6, type: 'Seafood' },
+    { name: 'YFM TILAPIA FILLET', pid: 31237984, pack: 6, type: 'Seafood' },
+    { name: 'YFM SLMN ATLANTIC PTN', pid: 31236718, pack: 6, type: 'Seafood' },
 ]
 
 /**
@@ -109,20 +118,27 @@ const SEED_PRODUCTS = [
  *
  * - Inserts products that do not yet exist in the DB (matched by PID).
  * - Skips products that already exist so accumulated GTINs are never wiped.
+ * - For existing products missing a shelf_life_days value, patches only that field (idempotent).
  * - Safe to call on every app launch.
  */
 export async function seedDefinedProducts(): Promise<void> {
     try {
         const collection = database.collections.get<DefinedProduct>('defined_products')
 
-        // Build a Set of PIDs that are already in the DB
+        // Build a map of existing products keyed by PID
         const existing = await collection.query().fetch()
-        const existingPIDs = new Set(existing.map(p => p.pid))
+        const existingByPID = new Map(existing.map(p => [p.pid, p]))
 
-        const toInsert = SEED_PRODUCTS.filter(p => !existingPIDs.has(p.pid))
+        const toInsert = SEED_PRODUCTS.filter(p => !existingByPID.has(p.pid.toString()))
 
-        if (toInsert.length === 0) {
-            console.log(`[Seed] defined_products up-to-date — ${existing.length} products, nothing to insert.`)
+        // Products that exist but are missing a shelf life that the seed knows about
+        const toPatchShelfLife = SEED_PRODUCTS.filter(p => {
+            const dbRecord = existingByPID.get(p.pid.toString());
+            return dbRecord && p.shelfLifeDays && !dbRecord.shelfLifeDays;
+        });
+
+        if (toInsert.length === 0 && toPatchShelfLife.length === 0) {
+            console.log(`[Seed] defined_products up-to-date — ${existing.length} products, nothing to insert or patch.`)
             return
         }
 
@@ -130,16 +146,31 @@ export async function seedDefinedProducts(): Promise<void> {
             const creates = toInsert.map(p =>
                 collection.prepareCreate(record => {
                     record.name = p.name
-                    record.pid = p.pid
+                    record.pid = p.pid.toString()
                     record.pack = p.pack
                     record.type = normalizeType(p.type)
+                    if (p.shelfLifeDays) record.shelfLifeDays = p.shelfLifeDays
                     // gtin intentionally omitted — will be populated during scanning
                 })
             )
-            await database.batch(...creates)
+
+            // Idempotent shelf life patch for already-existing rows
+            const patches = toPatchShelfLife.map(p => {
+                const dbRecord = existingByPID.get(p.pid.toString())!;
+                return dbRecord.prepareUpdate(record => {
+                    record.shelfLifeDays = p.shelfLifeDays;
+                });
+            });
+
+            await database.batch(...creates, ...patches)
         })
 
-        console.log(`[Seed] Inserted ${toInsert.length} new products. Total: ${existing.length + toInsert.length}.`)
+        if (toInsert.length > 0) {
+            console.log(`[Seed] Inserted ${toInsert.length} new products. Total: ${existing.length + toInsert.length}.`)
+        }
+        if (toPatchShelfLife.length > 0) {
+            console.log(`[Seed] Patched shelf_life_days on ${toPatchShelfLife.length} existing product(s): [${toPatchShelfLife.map(p => p.name).join(', ')}]`)
+        }
     } catch (error) {
         console.error('[Seed] Failed to seed defined_products:', error)
     }
