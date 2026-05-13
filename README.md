@@ -1,4 +1,4 @@
-# VizCount 🥩
+# VizCount 
 
 **VizCount** is a full-stack inventory intelligence system for meat department operations. Staff scan cooler stock with a mobile app, data is synced to Snowflake via a cloud function, and managers review live KPIs on a web dashboard.
 
